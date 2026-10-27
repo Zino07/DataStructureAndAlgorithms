@@ -1,0 +1,64 @@
+# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION BEGIN
+PassengerAppRoot "/home/zuexthaz/kaser-app"
+PassengerBaseURI "/"
+PassengerPython "/home/zuexthaz/virtualenv/kaser-app/3.11/bin/python"
+# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION END
+# Noor — Apache / LiteSpeed / Octenium cPanel configuration
+# Protects backend source files, secrets, SQLite database, and private JSON
+# mirrors from direct HTTP download when Apache/Nginx serves the directory.
+
+Options -Indexes -MultiViews
+
+# 1. Block access to hidden directories/files and internal state directories
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteRule ^(?:data|backups|__pycache__|\.git|\.vercel)(?:/|$) - [F,L,NC]
+  RewriteRule (?:^|/)\.(?!well-known(?:/|$)) - [F,L,NC]
+</IfModule>
+
+# 2. Block direct access to Python code, shell scripts, databases, backups,
+#    logs, configs, and private JSON runtime mirrors
+<FilesMatch "(?i)^(?:\.env.*|\.gitignore|\.vercelignore|\.bootstrap\.lock|\.mirror\.lock|orders\.json|users\.json|tokens\.json|reviews\.json|settings\.json|counter\.json|logo\.json|ratelimit\.json|vercel\.json|requirements\.txt|README\.md|.*\.(?:py|pyc|pyo|sh|bak|tmp|log|jsonl|sqlite3|sqlite3-wal|sqlite3-shm|corrupt.*|zip|lock|md))$">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</FilesMatch>
+
+# 3. Ensure correct MIME types for modern assets
+<IfModule mod_mime.c>
+  AddType font/woff2 .woff2
+  AddType image/webp .webp
+  AddType image/svg+xml .svg
+  AddType application/json .json
+</IfModule>
+
+# 4. Security headers for static files served directly by Apache/LiteSpeed
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "DENY"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+  Header always set Cross-Origin-Opener-Policy "same-origin"
+  Header always set Cross-Origin-Resource-Policy "same-origin"
+  Header always set X-Permitted-Cross-Domain-Policies "none"
+  Header always set Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; upgrade-insecure-requests"
+  Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+  # CSS/JS: browsers re-check on every visit (fast 304 if unchanged), so
+  # visitors never keep an old design after an update.
+  <FilesMatch "\.(?:css|js)$">
+    Header set Cache-Control "public, no-cache"
+  </FilesMatch>
+  # Fonts never change in place
+  <FilesMatch "\.woff2$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+  # Images: 7 days, then re-check
+  <FilesMatch "\.(?:jpg|jpeg|png|webp|svg|ico)$">
+    Header set Cache-Control "public, max-age=604800"
+  </FilesMatch>
+</IfModule>
