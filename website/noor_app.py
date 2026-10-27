@@ -152,11 +152,12 @@ LOGO_EXTS = (".png", ".jpg", ".jpeg", ".webp")
 
 FORBIDDEN_NAMES = {
     "tokens.json", "users.json", "orders.json", "reviews.json",
-    "settings.json", "counter.json", "logo.json", "ratelimit.json", "vercel.json",
+    "settings.json", "counter.json", "logo.json", "ratelimit.json", "admin.json",
     "server.py", "noor-server.py", "noor_app.py", "store.py", "wsgiapp.py",
     "passenger_wsgi.py", "analytics.jsonl", "readme.md", "noor-audit-report.txt",
 }
-FORBIDDEN_SUFFIX = (".bak", ".tmp", ".pyc", ".py", ".log", ".jsonl", ".zip", ".sh", ".env")
+FORBIDDEN_SUFFIX = (".bak", ".tmp", ".pyc", ".py", ".log", ".jsonl", ".zip", ".sh", ".env",
+                    ".gz", ".eml", ".sqlite3")
 PUBLIC_EXTS = {
     ".html", ".css", ".js", ".json", ".png", ".jpg", ".jpeg",
     ".webp", ".svg", ".xml", ".txt", ".ico", ".woff2",

@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Noor — local/production process restart.
 # Usage: ./restart.sh
-# Reads .env, refuses to start without a strong ADMIN_PIN, and only stops the
+# Reads .env, refuses to start with a short ADMIN_PIN, and only stops the
 # process recorded in its own PID file (never a test server on another port).
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -24,8 +24,8 @@ fi
 : "${BEHIND_TLS:=1}"
 export PORT HOST TRUST_PROXY BEHIND_TLS
 
-if [ -z "${ADMIN_PIN:-}" ] || [ "${#ADMIN_PIN}" -lt 8 ]; then
-  echo "ERROR: set a strong ADMIN_PIN (8+ characters) in ${ENV_FILE} or the environment." >&2
+if [ -n "${ADMIN_PIN:-}" ] && [ "${#ADMIN_PIN}" -lt 8 ]; then
+  echo "ERROR: ADMIN_PIN in ${ENV_FILE} is shorter than 8 characters." >&2
   exit 1
 fi
 

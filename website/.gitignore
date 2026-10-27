@@ -32,10 +32,11 @@ __pycache__/
 .venv/
 venv/
 
-# Node / Vercel
-.vercel/
+# Node
 node_modules/
-*.tsbuildinfo
+
+# Local email outbox used by tests (MAIL_OUTBOX)
+outbox/
 
 # OS / editor
 .DS_Store

@@ -23,125 +23,98 @@ standard library + vanilla JavaScript.
 ## Run locally
 
 ```bash
-cd noor
-ADMIN_PIN='choose-a-strong-pin' TRUST_PROXY=0 python3 server.py
+cd website
+ADMIN_PIN='choose-a-strong-pin' TRUST_PROXY=0 BEHIND_TLS=0 python3 server.py
 # http://127.0.0.1:8124/
 ```
 
-Handy environment variables:
+Add `MAIL_OUTBOX=outbox MAIL_FROM=test@example.com ADMIN_EMAIL=you@example.com`
+to write emails as `.eml` files in `outbox/` instead of sending them.
 
-| Variable | Default | Meaning |
-|---|---|---|
-| `PORT` | `8124` | HTTP port |
-| `HOST` | `127.0.0.1` | Bind address; use `0.0.0.0` only behind a proxy/firewall |
-| `ADMIN_PIN` | — | Admin login. Must be 8+ chars and not a known weak PIN; admin stays disabled otherwise |
-| `TRUST_PROXY` | `0` | Set `1` only behind a trusted reverse proxy, so `X-Forwarded-For` is used for rate limits |
-| `BEHIND_TLS` | `1` | Sends HSTS and marks cookies `Secure` (TLS terminated upstream) |
-| `NOOR_DB` | `data/noor.sqlite3` | SQLite path for local state |
+## Deploy on Octenium cPanel
 
-`.env` is loaded automatically by both `store.py` and `noor_app.py` and is also
-read by `./restart.sh` for validation. The restart script refuses to start
-without a strong `ADMIN_PIN`, defaults to `HOST=127.0.0.1` / `TRUST_PROXY=1` /
-`BEHIND_TLS=1`, and only stops the PID it started, so it will not kill a test
-server.
+The store runs only on Octenium shared hosting (cPanel + "Setup Python App" /
+Phusion Passenger). Everything uses the Python standard library: there is
+nothing to `pip install`.
 
-## Deploy to Octenium (`https://octenium.com/`)
+1. **Upload** — cPanel → File Manager → upload the project into the app folder
+   (for example `/home/<cpanel_user>/kaser-app`). Never upload `.env` from your
+   computer if it was ever shared; create a fresh one on the server.
+2. **Python app** — cPanel → Setup Python App → Create Application:
+   Python 3.11, application root `kaser-app`, URL = your domain,
+   startup file `passenger_wsgi.py`, entry point `application`.
+3. **`.env`** — copy `.env.example` to `.env` in the app folder, fill it in,
+   then set its permissions to `600`:
+   - `ADMIN_PIN`: a new strong one-time PIN (see "First sign-in" below).
+   - `SITE_URL`: `https://yourdomain.dz`.
+   - Email: create a mailbox in cPanel → Email Accounts (for example
+     `orders@yourdomain.dz`); its "Connect Devices" page shows the SMTP host
+     and port. Put them in `SMTP_*`, `MAIL_FROM`, `ADMIN_EMAIL` (where you want
+     order alerts) and `BACKUP_EMAIL` (a mailbox *outside* this server, such as
+     Gmail, for the off-site backup copy).
+4. **Restart** the app in Setup Python App and open `https://yourdomain.dz/api/health`
+   — it should show `{"ok": true, "backend": "sqlite"}`.
+5. **Check email** — cPanel → Terminal (or Setup Python App → "Execute python
+   script"): `python3 manage.py test-email`.
 
-### Option A — Octenium Shared Hosting (cPanel · Particulier / Professionnel / Entreprise)
+### First sign-in and 2-step verification
 
-Octenium's shared web hosting plans include **cPanel** with **CloudLinux Python
-Selector (Phusion Passenger)**, **Nginx® acceleration**, and free SSL.
+1. Open `https://yourdomain.dz/#admin`, leave **Username** empty and type the
+   `ADMIN_PIN` as the password.
+2. The Settings page opens. In **Sign-in & security** choose a username and a
+   password (10+ characters), confirm with the PIN, and save. From now on the
+   PIN no longer works.
+3. Click **Turn on 2-step verification**, scan the QR code with Google
+   Authenticator (or similar), type the 6-digit code plus your password, and
+   confirm. Sign-in now asks for the code from your phone.
+4. Optional: remove `ADMIN_PIN` from `.env` and restart.
 
-1. **Upload the project files**:
-   - Log in to **Octenium Client Area → Connexion au cPanel → File Manager**.
-   - Upload and extract the project archive into a dedicated directory (for
-     example `/home/<cpanel_user>/noor-app`) or directly into your domain's
-     application root, ensuring `.htaccess` and `passenger_wsgi.py` are present.
-2. **Create the Python Application in cPanel**:
-   - Open **Software → Setup Python App** in cPanel and click **Create Application**.
-   - **Python version**: Select **Python 3.9+** (3.10 / 3.11 / 3.12 recommended).
-   - **Application root**: `noor-app` (or your chosen folder).
-   - **Application URL**: Select your domain (root `/`).
-   - **Application startup file**: `passenger_wsgi.py`
-   - **Application Entry point**: `application`
-3. **Configure Environment Variables**:
-   - Either add environment variables in the **Setup Python App** screen or copy
-     `.env.example` to `.env` (`chmod 600 .env`) in the application root:
-     - `ADMIN_PIN`: Your strong admin PIN (at least 8 characters, not a common word).
-     - `TRUST_PROXY`: `1` (Octenium routes traffic through its local Nginx/Apache proxy).
-     - `BEHIND_TLS`: `1` (Octenium enables free SSL/HTTPS automatically).
-4. **Start & Verify**:
-   - Click **Create / Save** and then **Restart** in Setup Python App.
-   - Visit `https://yourdomain.dz/api/health` — it should return
-     `{"ok": true, "backend": "sqlite"}`.
-   - Visit `https://yourdomain.dz/#admin` and sign in with your `ADMIN_PIN` to
-     verify the store name, WhatsApp number, and social links.
+Locked out (lost phone or password)? Put a new `ADMIN_PIN` in `.env`, run
+`python3 manage.py reset-admin`, restart the app, and start again at step 1.
 
-> **Security on Apache/cPanel**: The included `.htaccess` automatically blocks
-> direct HTTP access to `.env`, `*.py`, `data/noor.sqlite3`, `*.bak`, and
-> private runtime JSON mirrors (`orders.json`, `users.json`, `tokens.json`,
-> `settings.json`, `reviews.json`, `logo.json`, `counter.json`). Keep
-> `.htaccess` in the application/document root and set `.env` permissions to `0600`.
+### Backups
 
-### Option B — Octenium VPS (`Serveur dédié VPS`)
+- A compressed copy of the database is made automatically once a day
+  (triggered by normal shop traffic), into `data/backups/` (the newest 14 are
+  kept). When `BACKUP_EMAIL` is set, each daily copy is also emailed there, so
+  a copy exists off the server.
+- The admin **Download backup (JSON)** button also starts a full backup.
+- Optional extra: cPanel → Cron Jobs, once a day:
+  `cd ~/kaser-app && python3 manage.py backup`
+- Restore: download a `noor-….sqlite3.gz`, unzip it, stop the app, replace
+  `data/noor.sqlite3` with it, start the app.
 
-1. Copy the project to `/opt/noor` (or `/var/www/noor`), create `.env` from
-   `.env.example` (`chmod 600 .env`) with a strong `ADMIN_PIN`, `TRUST_PROXY=1`,
-   and `BEHIND_TLS=1`.
-2. Start the server with `./restart.sh` (listens on `127.0.0.1:8124`) or run it
-   under `systemd` / Gunicorn (`gunicorn -w 2 -k gthread --threads 8 -b 127.0.0.1:8124 wsgiapp:application`).
-3. Proxy traffic from Nginx/Apache over HTTPS to `http://127.0.0.1:8124` with
-   `X-Forwarded-For` and `X-Real-IP` headers set.
-
-## Deploy to Vercel + Upstash Redis
-
-Vercel's filesystem is ephemeral, so production state uses Upstash Redis
-through `store.py`. The same code auto-selects Redis when these variables exist;
-local development keeps using SQLite.
-
-1. Create a free Upstash Redis database and copy its REST URL + token.
-2. Add the variables and deploy:
+### Maintenance commands
 
 ```bash
-npm i -g vercel
-vercel login
-vercel env add UPSTASH_REDIS_REST_URL production
-vercel env add UPSTASH_REDIS_REST_TOKEN production
-vercel env add ADMIN_PIN production        # 8+ chars, not noor-admin
-vercel env add TRUST_PROXY production      # value: 1
-vercel env add BEHIND_TLS production       # value: 1
-vercel --prod
+python3 manage.py status        # what is configured (no secrets shown)
+python3 manage.py backup        # back up now (+ email copy)
+python3 manage.py test-email    # send a test message to ADMIN_EMAIL
+python3 manage.py reset-admin   # remove the admin account (see above)
 ```
-
-`api/*.py` are thin routes over `wsgiapp.py`, which loads `noor_app.py`; static
-files are served by the CDN. `vercel.json` carries the security headers, CSP and
-blocks the backend source files from static URLs. `.vercelignore` keeps the
-local-only `server.py` wrapper, secrets, the database and runtime JSON out of the
-upload while leaving the modules needed by the functions in the bundle.
 
 ## Security notes
 
-- Admin and customer passwords/tokens are hashed (PBKDF2-SHA256, 310k rounds)
-  with transparent upgrades of older hashes; tokens are stored hashed.
-- Admin login has per-IP throttling and lockout after repeated failures.
-- Server enforces stock, size, quantity (1–20 per line), 24-line and 60-item
-  limits; prices and totals are computed server-side, never trusted from the
-  browser.
-- Order creation is transactional; retries with the same `Idempotency-Key` do
-  not double-decrement stock. Cancelling an order restocks each line exactly
-  once, including concurrent cancellation requests.
-- Sensitive files (`noor_app.py`, `store.py`, `wsgiapp.py`, `passenger_wsgi.py`,
-  `.env`, `orders.json`, `*.bak`, `data/`, SQLite files, `logo.json`) are never
-  served statically (`noor_app.py` allowlist + `.htaccess` on Apache/cPanel +
-  `vercel.json` on Vercel CDN).
-- CSP is self-only (no Google Fonts/CDNs), with `frame-ancestors 'none'`,
-  `nosniff`, COOP/CORP and a Permissions-Policy; HSTS is on by default.
-- Uploaded logos are size/type/MIME checked, stored as `logo.json` in backend
-  storage and served from `/api/logo` — this survives read-only/serverless
-  deployments.
-
-Set `chmod 600 .env`, use a unique admin PIN, and serve over HTTPS. Rotate the
-PIN if it has ever been shared.
+- Admin sign-in: username + password (PBKDF2-SHA256, 310k rounds) stored in
+  the database, optional TOTP 2-step verification with replay protection.
+  `ADMIN_PIN` only works until the account exists. Every security change asks
+  for the current password and signs out other admin sessions.
+- Login lockout (5 failures → 15 minutes) and rate limits are stored in
+  SQLite, so they hold across all Passenger worker processes and restarts.
+- Customer and admin sessions are random 256-bit tokens stored only as
+  SHA-256 digests; customer passwords use PBKDF2 and can be reset by an
+  emailed single-use link (valid 1 hour).
+- The server enforces stock, size, quantity (1–20 per line), 24-line and
+  60-item limits; prices and totals are computed server-side. Order creation
+  is transactional and idempotent (a retried request never double-orders).
+- Orders, accounts, sessions and reviews live only in SQLite (`data/`) and the
+  backups — not in JSON files next to the code.
+- Python files, `.env`, `data/`, backups and private JSON are never served
+  (allowlist in `noor_app.py` + `.htaccess`).
+- Strict CSP (self only, `upgrade-insecure-requests`), `frame-ancestors 'none'`,
+  `nosniff`, COOP/CORP, Permissions-Policy (payments off), HSTS.
+- Unexpected errors are logged and emailed to `ADMIN_EMAIL` (at most one
+  email per 15 minutes).
 
 ## Owner guide
 
@@ -164,7 +137,8 @@ PIN if it has ever been shared.
 - **Storefront**: brand name, logo upload/removal, theme presets/custom colors,
   announcement banner.
 - **Discounts**: add/enable/disable/delete percentage codes.
-- **Settings**: WhatsApp number, backup download, logout.
+- **Settings**: WhatsApp number and social pages, sign-in & 2-step
+  verification, email/backup status, backup download, logout.
 - Customers can share a product with `/#/p/<product-id>`; the quick view opens
   directly.
 
@@ -172,35 +146,28 @@ PIN if it has ever been shared.
 
 | File | Content |
 |---|---|
-| `products.json` | Catalog seed + human-readable mirror; SQLite/Redis is live truth |
-| `orders.json` | Orders mirror (`.bak` rotation on save) |
-| `users.json` | PBKDF2-hashed passwords, never plaintext |
-| `tokens.json` | Hashed, expiring login/admin tokens |
-| `reviews.json` | Product reviews (capped) |
-| `analytics.jsonl` | View/add/order events for admin stats |
-| `settings.json` | Brand, WhatsApp, theme, banner, promos, logo reference |
+| `data/noor.sqlite3` | The database: orders, products, accounts, sessions, reviews, settings, admin account |
+| `data/backups/` | Daily compressed database backups (newest 14) |
+| `products.json` | Catalog seed + readable copy of the live catalog |
+| `settings.json` | Store settings seed + readable copy (brand, WhatsApp, theme, banner, promos) |
 | `shipping.json` | Carrier fees and wilaya zones |
-| `logo.json` | Uploaded logo bytes (base64) + MIME type |
-| `data/noor.sqlite3` | Local transactional store (not for static serving) |
 | `images/opt/` | Responsive WebP product variants |
 
-Back up `orders.json`, `products.json`, `users.json` (Admin → Backup JSON) and
-the SQLite database/Redis instance regularly.
+Older versions also wrote `orders.json`, `users.json`, `tokens.json`,
+`reviews.json`, `counter.json` and `logo.json` next to the code. On first
+start, after their content is in the database, those copies are deleted.
 
-## Tests and performance
+## Customer emails
 
-The repository was verified with:
+When email is configured the shop sends:
+- the customer an order confirmation (French + Arabic) when they gave an
+  email or were signed in, and a message when the order is confirmed,
+  shipped, delivered or cancelled;
+- you (`ADMIN_EMAIL`) an alert for every new order and for server errors;
+- password-reset links for customer accounts.
 
-- API/security suite: 56 checks (headers, static exposure, auth, server-side
-  pricing, promos, stock, idempotency, cancellation restock, reviews,
-  tracking whitelist, product CRUD, oversized bodies).
-- Concurrency suite: last-item race, concurrent same-key orders, concurrent
-  cancellation, order caps.
-- Browser flows: EN/FR/AR RTL, shop/filters, quick view, size guide, cart,
-  checkout, admin login/tabs/order cancellation, logo upload, stale-cart
-  sanitisation.
-- Lighthouse mobile: **85 performance**, 100 accessibility, 100 best practices,
-  100 SEO (desktop: 98 / 100 / 100 / 100).
+Payments: cash on delivery only. The Permissions-Policy header keeps the
+browser payment APIs switched off until online payment is added.
 
 ## Shipping data
 

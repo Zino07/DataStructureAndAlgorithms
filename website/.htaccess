@@ -7,13 +7,13 @@ Options -Indexes -MultiViews
 # 1. Block access to hidden directories/files and internal state directories
 <IfModule mod_rewrite.c>
   RewriteEngine On
-  RewriteRule ^(?:data|backups|__pycache__|\.git|\.vercel)(?:/|$) - [F,L,NC]
+  RewriteRule ^(?:data|backups|__pycache__|\.git)(?:/|$) - [F,L,NC]
   RewriteRule (?:^|/)\.(?!well-known(?:/|$)) - [F,L,NC]
 </IfModule>
 
 # 2. Block direct access to Python code, shell scripts, databases, backups,
 #    logs, configs, and private JSON runtime mirrors
-<FilesMatch "(?i)^(?:\.env.*|\.gitignore|\.vercelignore|\.bootstrap\.lock|\.mirror\.lock|orders\.json|users\.json|tokens\.json|reviews\.json|settings\.json|counter\.json|logo\.json|ratelimit\.json|vercel\.json|requirements\.txt|README\.md|.*\.(?:py|pyc|pyo|sh|bak|tmp|log|jsonl|sqlite3|sqlite3-wal|sqlite3-shm|corrupt.*|zip|lock|md))$">
+<FilesMatch "(?i)^(?:\.env.*|\.gitignore|\.bootstrap\.lock|\.mirror\.lock|orders\.json|users\.json|tokens\.json|reviews\.json|settings\.json|counter\.json|logo\.json|ratelimit\.json|admin\.json|requirements\.txt|README\.md|.*\.(?:py|pyc|pyo|sh|bak|tmp|log|jsonl|sqlite3|sqlite3-wal|sqlite3-shm|corrupt.*|zip|lock|md))$">
   <IfModule mod_authz_core.c>
     Require all denied
   </IfModule>
@@ -40,13 +40,19 @@ Options -Indexes -MultiViews
   Header always set Cross-Origin-Opener-Policy "same-origin"
   Header always set Cross-Origin-Resource-Policy "same-origin"
   Header always set X-Permitted-Cross-Domain-Policies "none"
-  Header always set Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+  Header always set Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; upgrade-insecure-requests"
   Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
 
-  <FilesMatch "\.(?:css|js|woff2)$">
+  # CSS/JS: re-checked on every visit (a fast 304 when unchanged) so a design
+  # update never gets stuck in visitors' browsers. (When the Python app serves
+  # them, versioned URLs like app.js?v=... are cached for a year instead.)
+  <FilesMatch "\.(?:css|js)$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+  <FilesMatch "\.woff2$">
     Header set Cache-Control "public, max-age=31536000, immutable"
   </FilesMatch>
   <FilesMatch "\.(?:jpg|jpeg|png|webp|svg|ico)$">
-    Header set Cache-Control "public, max-age=2592000, immutable"
+    Header set Cache-Control "public, max-age=604800"
   </FilesMatch>
 </IfModule>
