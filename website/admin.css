@@ -523,3 +523,16 @@ body.admin-mode .page-view.admin-shell {
   .pd-thumb { width: 64px; height: 78px; }
   #pdImgExisting { min-width: 100%; }
 }
+
+/* Sign-in & security (username + password + 2-step verification) */
+.adm-login-card .adm-pin-row + label,
+#adminCodeWrap { margin-top: 14px; }
+.adm-login-hint { font-size: 11.5px; line-height: 1.45; color: var(--fg-faint); margin-top: 12px; }
+.adm-sec-alert { background: #fbf4e6; border: 1px solid rgba(138,109,59,.28); color: #5b4318; border-radius: 10px; padding: 10px 12px; font-size: 12.5px; line-height: 1.5; }
+.adm-sec-alert[hidden], .adm-sec-2fa[hidden] { display: none; }
+.adm-sec-2fa { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid rgba(23,18,20,.07); padding-top: 14px; margin-top: 4px; }
+#admSec2faSetup:not([hidden]), #admSec2faOff:not([hidden]) { display: flex; flex-direction: column; gap: 10px; }
+.adm-qr { background: #fff; border: 1px solid rgba(23,18,20,.08); border-radius: 10px; padding: 8px; width: max-content; max-width: 100%; }
+.adm-qr svg { display: block; width: 168px; height: 168px; }
+.adm-hint code { word-break: break-all; }
+.adm-btn[hidden] { display: none; }

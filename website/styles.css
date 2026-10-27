@@ -1186,3 +1186,13 @@ body.contact-open .foot {
   .swatch { height: 215px; }
   .card h3 { font-size: 12px; }
 }
+
+/* Password reset, checkout privacy line, privacy notice */
+.auth-form[hidden] { display: none; }
+.auth-forgot { align-self: flex-start; font-size: 12.5px; margin-top: -6px; }
+[dir="rtl"] .auth-forgot { align-self: flex-end; }
+.auth-help { font-size: 13.5px; line-height: 1.5; color: var(--fg-soft); }
+.co-privacy { margin-top: 10px; }
+.co-privacy .foot-link { font-size: inherit; }
+.privacy-box h3 { margin: 18px 0 4px; }
+.privacy-box .contact-note { margin-top: 0; max-width: 62ch; }

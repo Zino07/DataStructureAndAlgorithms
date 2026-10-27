@@ -1304,7 +1304,7 @@ class Handler(BaseHTTPRequestHandler):
             if parsed.path.endswith("/account"):
                 if not current_ok:
                     ADMIN_GUARD.fail(guard_key)
-                    self._json(401, {"ok": False, "error": "current-wrong"})
+                    self._json(403, {"ok": False, "error": "current-wrong"})
                     return
                 user = str(data.get("user", "")).strip()
                 new_pass = str(data.get("pass", ""))[:128]
@@ -1341,7 +1341,7 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 if not current_ok or totp_match(secret, data.get("code")) is None:
                     ADMIN_GUARD.fail(guard_key)
-                    self._json(401, {"ok": False, "error": "code-wrong"})
+                    self._json(403, {"ok": False, "error": "code-wrong"})
                     return
                 _store.kv_take("totp:pending:" + my_digest)
                 with MUTEX():
@@ -1358,7 +1358,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if not current_ok or totp_match(acct["totp"], data.get("code")) is None:
                 ADMIN_GUARD.fail(guard_key)
-                self._json(401, {"ok": False, "error": "code-wrong"})
+                self._json(403, {"ok": False, "error": "code-wrong"})
                 return
             with MUTEX():
                 acct = admin_account()

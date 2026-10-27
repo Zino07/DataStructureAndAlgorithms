@@ -111,6 +111,36 @@
   };
   var I18N_EXTRA = {
     en: {
+      forgotLink:"Forgot password?",
+      forgotHelp:"Enter your account email. We'll send you a link to choose a new password.",
+      back:"Back",
+      forgotSend:"Send link",
+      forgotSent:"If an account exists for this email, a reset link is on its way. Check your inbox and spam folder.",
+      forgotNoMail:"Password reset by email isn't available yet. Message us on WhatsApp and we'll help you.",
+      forgotBad:"Enter a valid email address.",
+      resetHelp:"Choose a new password for your account.",
+      resetNew:"New password",
+      resetConfirm:"Repeat new password",
+      resetSave:"Save password",
+      resetDone:"Password changed. Sign in with your new password.",
+      resetExpired:"This link has expired or was already used. Ask for a new one.",
+      resetWeak:"Use at least 8 characters.",
+      resetMismatch:"The two passwords don't match.",
+      coEmail:"Email (optional, for your confirmation)",
+      orderFailed:"Your order wasn't sent. Check your connection and try again, or order on WhatsApp.",
+      privacyAgree:"Your details are used only to deliver your order.",
+      privacyLink:"Privacy",
+      privacyKicker:"Your data",
+      privacyTitle:"Privacy notice",
+      privacyIntro:"We collect only what we need to deliver your order, and we never sell it.",
+      privacyCollectT:"What we keep",
+      privacyCollect:"For an order: your name, phone, wilaya, commune and the items. Optionally your email, for the confirmation. With an account: your email and a protected (hashed) password. We also count page views and bag additions, without cookies and without names.",
+      privacyUseT:"Who sees it",
+      privacyUse:"The store team, and the delivery company you choose (name, phone and address only). Nothing is used for advertising.",
+      privacyDeviceT:"On your device",
+      privacyDevice:"Your bag, language and delivery details are saved in your browser so you don't retype them. A sign-in cookie keeps you logged in. There are no advertising or tracking cookies.",
+      privacyRightsT:"Your rights",
+      privacyRights:"Under Algerian law 18-07 you can ask to see, correct or delete your data. Message us on WhatsApp or through the Contact page.",
       title:"Noor — Thobe House | Men's Thobes, Djellabas & Shirts",
       bannerDefault:"Free delivery over 8,000 DZD · Cash on delivery in all 58 wilayas",
       navShop:"Thobes", navSize:"Size guide", navAbout:"Our house",
@@ -169,6 +199,36 @@
       foot:"Noor Thobe House &nbsp;·&nbsp; Algiers &nbsp;·&nbsp; Cash on delivery across Algeria"
     },
     fr: {
+      forgotLink:"Mot de passe oublié ?",
+      forgotHelp:"Saisissez l'e-mail de votre compte. Nous vous enverrons un lien pour choisir un nouveau mot de passe.",
+      back:"Retour",
+      forgotSend:"Envoyer le lien",
+      forgotSent:"Si un compte existe pour cet e-mail, un lien de réinitialisation arrive. Vérifiez votre boîte de réception et vos spams.",
+      forgotNoMail:"La réinitialisation par e-mail n'est pas encore disponible. Écrivez-nous sur WhatsApp, nous vous aiderons.",
+      forgotBad:"Saisissez une adresse e-mail valide.",
+      resetHelp:"Choisissez un nouveau mot de passe pour votre compte.",
+      resetNew:"Nouveau mot de passe",
+      resetConfirm:"Répétez le nouveau mot de passe",
+      resetSave:"Enregistrer",
+      resetDone:"Mot de passe modifié. Connectez-vous avec le nouveau mot de passe.",
+      resetExpired:"Ce lien a expiré ou a déjà été utilisé. Demandez-en un nouveau.",
+      resetWeak:"Utilisez au moins 8 caractères.",
+      resetMismatch:"Les deux mots de passe ne correspondent pas.",
+      coEmail:"E-mail (facultatif, pour la confirmation)",
+      orderFailed:"Votre commande n'a pas été envoyée. Vérifiez votre connexion et réessayez, ou commandez sur WhatsApp.",
+      privacyAgree:"Vos coordonnées servent uniquement à livrer votre commande.",
+      privacyLink:"Confidentialité",
+      privacyKicker:"Vos données",
+      privacyTitle:"Confidentialité",
+      privacyIntro:"Nous collectons uniquement ce qui est nécessaire pour livrer votre commande, et nous ne le vendons jamais.",
+      privacyCollectT:"Ce que nous conservons",
+      privacyCollect:"Pour une commande : nom, téléphone, wilaya, commune et articles. Votre e-mail si vous le donnez, pour la confirmation. Avec un compte : votre e-mail et un mot de passe protégé (haché). Nous comptons aussi les vues et les ajouts au panier, sans cookies et sans noms.",
+      privacyUseT:"Qui les voit",
+      privacyUse:"L'équipe de la boutique et la société de livraison choisie (nom, téléphone et adresse uniquement). Rien n'est utilisé pour la publicité.",
+      privacyDeviceT:"Sur votre appareil",
+      privacyDevice:"Votre panier, votre langue et vos coordonnées de livraison sont enregistrés dans votre navigateur pour éviter de les ressaisir. Un cookie de connexion vous garde connecté. Aucun cookie publicitaire ou de suivi.",
+      privacyRightsT:"Vos droits",
+      privacyRights:"Selon la loi algérienne 18-07, vous pouvez demander à consulter, corriger ou supprimer vos données. Écrivez-nous sur WhatsApp ou via la page Contact.",
       title:"Noor — Maison du Thobe | Thobes, Djellabas & Chemises",
       bannerDefault:"Livraison offerte dès 8 000 DZD · Paiement à la livraison dans les 58 wilayas",
       navShop:"Thobes", navSize:"Guide des tailles", navAbout:"La maison",
@@ -227,6 +287,36 @@
       foot:"Noor Maison du Thobe &nbsp;·&nbsp; Alger &nbsp;·&nbsp; Paiement à la livraison partout en Algérie"
     },
     ar: {
+      forgotLink:"نسيت كلمة المرور؟",
+      forgotHelp:"أدخل بريد حسابك الإلكتروني وسنرسل لك رابطاً لاختيار كلمة مرور جديدة.",
+      back:"رجوع",
+      forgotSend:"إرسال الرابط",
+      forgotSent:"إذا كان هناك حساب بهذا البريد، فرابط إعادة التعيين في الطريق. تحقق من بريدك الوارد ومجلد الرسائل غير المرغوب فيها.",
+      forgotNoMail:"إعادة تعيين كلمة المرور بالبريد غير متاحة بعد. راسلنا على واتساب وسنساعدك.",
+      forgotBad:"أدخل بريداً إلكترونياً صحيحاً.",
+      resetHelp:"اختر كلمة مرور جديدة لحسابك.",
+      resetNew:"كلمة المرور الجديدة",
+      resetConfirm:"أعد كتابة كلمة المرور الجديدة",
+      resetSave:"حفظ كلمة المرور",
+      resetDone:"تم تغيير كلمة المرور. سجّل الدخول بكلمة المرور الجديدة.",
+      resetExpired:"انتهت صلاحية هذا الرابط أو استُخدم من قبل. اطلب رابطاً جديداً.",
+      resetWeak:"استخدم 8 أحرف على الأقل.",
+      resetMismatch:"كلمتا المرور غير متطابقتين.",
+      coEmail:"البريد الإلكتروني (اختياري، لتأكيد الطلب)",
+      orderFailed:"لم يتم إرسال طلبك. تحقق من اتصالك وحاول مجدداً، أو اطلب عبر واتساب.",
+      privacyAgree:"نستخدم بياناتك فقط لتوصيل طلبك.",
+      privacyLink:"الخصوصية",
+      privacyKicker:"بياناتك",
+      privacyTitle:"إشعار الخصوصية",
+      privacyIntro:"نجمع فقط ما نحتاجه لتوصيل طلبك، ولا نبيعه أبداً.",
+      privacyCollectT:"ما نحتفظ به",
+      privacyCollect:"للطلب: الاسم والهاتف والولاية والبلدية والمنتجات. وبريدك الإلكتروني إن أدخلته لتأكيد الطلب. مع الحساب: بريدك وكلمة مرور محمية (مشفّرة). ونحصي أيضاً مشاهدات الصفحات والإضافات إلى السلة، دون ملفات تعريف الارتباط ودون أسماء.",
+      privacyUseT:"من يطّلع عليها",
+      privacyUse:"فريق المتجر وشركة التوصيل التي تختارها (الاسم والهاتف والعنوان فقط). لا يُستخدم أي شيء للإعلانات.",
+      privacyDeviceT:"على جهازك",
+      privacyDevice:"تُحفظ سلتك ولغتك وبيانات التوصيل في متصفحك حتى لا تعيد كتابتها. ملف تعريف ارتباط لتسجيل الدخول يُبقيك متصلاً. لا توجد ملفات تعريف ارتباط إعلانية أو للتتبع.",
+      privacyRightsT:"حقوقك",
+      privacyRights:"وفق القانون الجزائري 18-07 يمكنك طلب الاطلاع على بياناتك أو تصحيحها أو حذفها. راسلنا على واتساب أو عبر صفحة التواصل.",
       title:"نور — دار الثوب | ثوب وجلابيب وقمصان",
       bannerDefault:"توصيل مجاني فوق 8,000 دج · الدفع عند الاستلام في 58 ولاية",
       navShop:"الثياب", navSize:"دليل المقاسات", navAbout:"دار نور",
@@ -690,11 +780,18 @@
     var link = document.createElement("link");
     link.id = "adminCss";
     link.rel = "stylesheet";
-    link.href = "admin.css?v=20261022J";
+    link.href = "admin.css?v=20261027A";
     document.head.appendChild(link);
   }
   function handleRoute(){
     var hash=(window.location.hash.replace("#","")||"home");
+    if(hash.indexOf("reset=")===0){
+      // Password-reset link from the email: keep the token in memory only.
+      resetToken = hash.slice(6).replace(/[^A-Za-z0-9_-]/g,"").slice(0,128);
+      try{ history.replaceState(null, "", window.location.pathname + window.location.search + "#home"); }catch(e){}
+      hash = "home";
+      setTimeout(function(){ openAuthModal("reset"); var rp=document.getElementById("resetPass"); if(rp) rp.focus(); }, 60);
+    }
     if(hash==="home"){ if(window.__carStart) window.__carStart(); }
     else if(window.__carStop) window.__carStop();
     document.body.classList.toggle("admin-mode", hash==="admin");
@@ -736,8 +833,53 @@
     else if(hash==="home"){ var h=document.querySelector('.tabbar [data-tab="home"]'); if(h) h.classList.add("on"); }
     var mm=document.getElementById("mobileMenu"); if(mm) mm.classList.remove("open");
   }
-  function openAuthModal(){ authModal.classList.add("open"); }
-  function closeAuthModal(){ authModal.classList.remove("open"); }
+  var forgotForm = document.getElementById("forgotForm"), resetForm = document.getElementById("resetForm"), resetToken = "";
+  function authMode(m){
+    authForm.hidden = m!=="login";
+    if(forgotForm) forgotForm.hidden = m!=="forgot";
+    if(resetForm) resetForm.hidden = m!=="reset";
+  }
+  function openAuthModal(mode){ authMode(mode||"login"); authModal.classList.add("open"); }
+  function closeAuthModal(){ authModal.classList.remove("open"); authMode("login"); }
+  function postJson(path, body){
+    return fetch(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}).then(function(r){
+      return r.json().catch(function(){ return {}; }).then(function(j){ return {status:r.status, body:j||{}}; });
+    });
+  }
+  document.getElementById("forgotBtn").addEventListener("click", function(){
+    document.getElementById("forgotEmail").value = authEmail.value.trim();
+    authMode("forgot"); document.getElementById("forgotEmail").focus();
+  });
+  document.getElementById("forgotBack").addEventListener("click", function(){ authMode("login"); });
+  document.getElementById("resetCancel").addEventListener("click", function(){ resetToken = ""; closeAuthModal(); });
+  forgotForm.addEventListener("submit", function(e){
+    e.preventDefault();
+    var email = document.getElementById("forgotEmail").value.trim().toLowerCase();
+    var btn = document.getElementById("forgotSend"); btn.disabled = true;
+    postJson("/api/auth/forgot",{email:email}).then(function(res){
+      if(res.status===200 && res.body.ok){
+        if(res.body.mail){ notify(t("forgotSent"),"success"); authEmail.value = email; authMode("login"); }
+        else notify(t("forgotNoMail"),"info");
+      } else if(res.status===429) notify(t("tooFast"),"error");
+      else notify(t("forgotBad"),"error");
+    }).catch(function(){ notify(t("orderFailed"),"error"); }).then(function(){ btn.disabled = false; });
+  });
+  resetForm.addEventListener("submit", function(e){
+    e.preventDefault();
+    var p1 = document.getElementById("resetPass").value, p2 = document.getElementById("resetPass2").value;
+    if(p1.length < 8){ notify(t("resetWeak"),"error"); return; }
+    if(p1 !== p2){ notify(t("resetMismatch"),"error"); return; }
+    var btn = document.getElementById("resetSave"); btn.disabled = true;
+    postJson("/api/auth/reset",{token:resetToken, pass:p1}).then(function(res){
+      if(res.status===200 && res.body.ok){
+        resetToken = ""; document.getElementById("resetPass").value = ""; document.getElementById("resetPass2").value = "";
+        authEmail.value = res.body.email || ""; document.getElementById("authPass").value = "";
+        notify(t("resetDone"),"success"); authMode("login"); document.getElementById("authPass").focus();
+      } else if(res.status===429) notify(t("tooFast"),"error");
+      else if(res.body.error==="weak") notify(t("resetWeak"),"error");
+      else { notify(t("resetExpired"),"error"); authMode("forgot"); }
+    }).catch(function(){ notify(t("orderFailed"),"error"); }).then(function(){ btn.disabled = false; });
+  });
   authBtn.addEventListener("click", function(){ if(authState.isLoggedIn){ window.location.hash="dashboard"; } else openAuthModal(); });
   closeAuthBtn.addEventListener("click", closeAuthModal);
   authModal.addEventListener("click", function(e){ if(e.target===authModal) closeAuthModal(); });
@@ -759,6 +901,13 @@
     updateAuthUI(); notify(t("bye"),"info"); window.location.hash="home";
   });
   window.addEventListener("hashchange", handleRoute);
+  var privacyModal = document.getElementById("privacyModal");
+  function openPrivacy(){ if(privacyModal) privacyModal.classList.add("open"); }
+  function closePrivacy(){ if(privacyModal) privacyModal.classList.remove("open"); }
+  Array.prototype.forEach.call(document.querySelectorAll("[data-open-privacy]"), function(b){ b.addEventListener("click", openPrivacy); });
+  ["privacyClose","privacyClose2"].forEach(function(id){ var b=document.getElementById(id); if(b) b.addEventListener("click", closePrivacy); });
+  if(privacyModal) privacyModal.addEventListener("click", function(e){ if(e.target===privacyModal) closePrivacy(); });
+  document.addEventListener("keydown", function(e){ if(e.key==="Escape" && privacyModal && privacyModal.classList.contains("open")) closePrivacy(); });
 
   var progress=0, smoothProgress=0, docMax=0, lastProgress=-1;
   function readScroll(){
@@ -1330,23 +1479,20 @@
     var payload = {items:[{id:exId,size:exSize,qty:exQty}], name:name, phone:phone, commune:comm,
       wilaya:parseInt(wcode,10), method:m.method, provider:m.prov, promo:"",
       email:authState.email||"", token:apiToken,
-      idem:(Date.now().toString(36)+Math.random().toString(36).slice(2,10))};
+      idem:(exIdem || (exIdem = Date.now().toString(36)+Math.random().toString(36).slice(2,10)))};
     var place = document.getElementById("exPlace");
     exInflight=true; if(place) place.disabled=true;
     function done(){ exInflight=false; if(place) place.disabled=false; }
     api("/api/orders","POST",payload).then(function(r){
       done();
-      if(r && r.ok){ finishExpress(r.num, r.items, r.total, payload); }
-      else notify(t("expressFailed"),"error");
+      if(r && r.ok){ exIdem = ""; finishExpress(r.num, r.items, r.total, payload); }
+      else notify(t("orderFailed"),"error");
     }).catch(function(e){
       done();
-      if(e && e.status===409){ notify(t("oos"),"error"); syncStock().then(function(){renderProducts();}).catch(function(){}); }
+      if(e && e.status===409){ exIdem = ""; notify(t("oos"),"error"); syncStock().then(function(){renderProducts();}).catch(function(){}); }
       else if(e && e.status===429){ notify(t("tooFast"),"error"); }
-      else if(e && e.status===400){ notify(t("coFill"),"error"); }
-      else if(!e || !e.status){
-        var num = createLocalOrder(payload, m);
-        finishExpress(num, m.n, money(m.total), payload);
-      } else { notify(t("expressFailed"),"error"); }
+      else if(e && e.status===400){ exIdem = ""; notify(t("coFill"),"error"); }
+      else notify(t("orderFailed"),"error");
     });
   }
   function expressDoneWaLink(){
@@ -1686,6 +1832,8 @@
     return "https://wa.me/"+WHATSAPP_NUMBER+"?text="+encodeURIComponent(msg);
   }
   function prefillCustomer(){
+    var em=document.getElementById("coEmailIn");
+    if(em){ em.value = authState.email || em.value; em.disabled = !!authState.email; }
     var c = customerDetails(); if(!c) return;
     var nameEl=document.getElementById("coNameIn"), phoneEl=document.getElementById("coPhoneIn"), comEl=document.getElementById("coCommuneIn");
     if(nameEl && c.name) nameEl.value = c.name;
@@ -1725,6 +1873,7 @@
     else { promoApplied = null; notify(t("coPromoBad"),"error"); }
     coTotals();
   });
+  var coIdem = "", exIdem = "";
   document.getElementById("coPlace").addEventListener("click", function(){
     var nameEl = document.getElementById("coNameIn"), phoneEl = document.getElementById("coPhoneIn"), comEl = document.getElementById("coCommuneIn");
     var name = nameEl.value.trim();
@@ -1742,15 +1891,26 @@
     if(coInflight) return;
     coInflight = true;
     var placeBtn = document.getElementById("coPlace"); placeBtn.disabled = true;
-    var payload = {items:cart.map(function(i){ return {id:i.id, size:i.size||"", qty:i.qty}; }), name:name, phone:phone, commune:comm, wilaya:parseInt(wcode,10), method:shipMethod(), provider:coProvider(), promo:(promoApplied?promoApplied.code:""), email:authState.email||"", token:apiToken, idem:(Date.now().toString(36)+Math.random().toString(36).slice(2,10))};
+    var coEmailEl = document.getElementById("coEmailIn");
+    // One idempotency key per checkout attempt: retrying after a dropped
+    // connection can never create the order twice.
+    if(!coIdem) coIdem = Date.now().toString(36)+Math.random().toString(36).slice(2,10);
+    var payload = {items:cart.map(function(i){ return {id:i.id, size:i.size||"", qty:i.qty}; }), name:name, phone:phone, commune:comm, wilaya:parseInt(wcode,10), method:shipMethod(), provider:coProvider(), promo:(promoApplied?promoApplied.code:""), email:authState.email||(coEmailEl?coEmailEl.value.trim():""), token:apiToken, idem:coIdem};
     saveCustomerDetails(payload);
     var m = coMath();
     function coDone(){ coInflight = false; placeBtn.disabled = false; }
     api("/api/orders","POST",payload).then(function(r){
       coDone();
-      if(r && r.ok){ apiMode = true; afterOrder(r.num, r.items, r.total); }
-      else { localOrder(payload, m); }
-    }).catch(function(){ coDone(); localOrder(payload, m); });
+      if(r && r.ok){ apiMode = true; coIdem = ""; afterOrder(r.num, r.items, r.total); }
+      else notify(t("orderFailed"),"error");
+    }).catch(function(e){
+      coDone();
+      // Never show "Order confirmed" unless the shop really received it.
+      if(e && e.status===409){ coIdem = ""; notify(t("oos"),"error"); syncStock().then(function(){ renderProducts(); renderCart(); }).catch(function(){}); }
+      else if(e && e.status===429){ notify(t("tooFast"),"error"); }
+      else if(e && e.status===400){ coIdem = ""; notify(t("coFill"),"error"); }
+      else notify(t("orderFailed"),"error");
+    });
   });
   /* ----- Language switcher + misc ----- */
   function updateMiniAdds(){
@@ -1876,23 +2036,6 @@
     document.getElementById("coDoneInfo").innerHTML = orderInfoHtml(num, n, total);
     notify(t("coPlaced", n, total),"success"); track("order_placed",{n:n});
   }
-  function createLocalOrder(payload, m){
-    var num = "NOOR-"+Date.now().toString(36).toUpperCase();
-    try{
-      var orders = storeGet("noor_orders", []);
-      orders.push({num:num, date:new Date().toISOString(), items:m.n, total:money(m.total),
-        name:payload.name, phone:payload.phone, commune:payload.commune, wilaya:payload.wilaya+" — "+WILAYAS[payload.wilaya-1], method:payload.method,
-        lines:payload.items.map(function(i){ var p=productById(i.id); return {id:i.id,name:p?p.name:i.id,size:i.size,qty:i.qty}; })});
-      if(orders.length>50) orders = orders.slice(-50);
-      storeSet("noor_orders", orders);
-      refreshOrders();
-    }catch(e){}
-    return num;
-  }
-  function localOrder(payload, m){
-    var num = createLocalOrder(payload, m);
-    afterOrder(num, m.n, money(m.total));
-  }
   /* ----- Admin ----- */
   var admToken = "";
   try{ admToken = sessionStorage.getItem("noor_admin") || ""; }catch(e){ admToken = ""; }
@@ -1991,6 +2134,7 @@
       fillAdminForms();
       renderAdmTab();
       updateOrdersBadge();
+      admSecLoad();
     }).catch(function(){ admSetLoading(false); });
   }
   function updateOrdersBadge(){
@@ -2643,7 +2787,9 @@
   function admLogout(){
     if(admToken) api("/api/admin/logout","POST",null,{"Authorization":"Bearer "+admToken}).catch(function(){});
     admSaveToken("");
-    var pin = document.getElementById("adminPin"); if(pin) pin.value = "";
+    ["adminPin","adminCode","admSecPass","admSecCur","admSecCode","admSecOffCode"].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=""; });
+    var cw = document.getElementById("adminCodeWrap"); if(cw) cw.hidden = true;
+    admSec = null;
     ADM = { orders:[], products:[], stats:null, settings:null, shipping:null, images:null };
     admLoaded = false;
     adminShowLogin();
@@ -2666,31 +2812,127 @@
       notify("Backup downloaded","success");
     }).catch(function(){ notify("Backup failed","error"); });
   });
+  function apiRaw(path, method, body, headers){
+    var h = Object.assign({"Content-Type":"application/json"}, headers||{});
+    return fetch(path, {method:method||"POST", headers:h, body:body?JSON.stringify(body):undefined}).then(function(r){
+      return r.json().catch(function(){ return {}; }).then(function(j){ return {status:r.status, body:j||{}}; });
+    });
+  }
   document.getElementById("adminLoginForm").addEventListener("submit", function(e){
     e.preventDefault();
-    var pinEl = document.getElementById("adminPin"), err = document.getElementById("adminLoginError");
-    var btn = document.getElementById("adminGo");
-    var pin = pinEl.value;
-    if(!pin){ if(err){ err.textContent="Enter your PIN to continue."; err.hidden=false; } return; }
+    var userEl = document.getElementById("adminUser"), pinEl = document.getElementById("adminPin");
+    var codeEl = document.getElementById("adminCode"), codeWrap = document.getElementById("adminCodeWrap");
+    var err = document.getElementById("adminLoginError"), btn = document.getElementById("adminGo");
+    var user = userEl ? userEl.value.trim() : "", pass = pinEl.value;
+    var code = codeEl ? codeEl.value.replace(/\D/g,"") : "";
+    function showErr(m){ if(err){ err.textContent=m; err.hidden=false; } }
+    if(!pass){ showErr("Enter your password to continue."); return; }
     if(err) err.hidden = true;
     if(btn){ btn.disabled=true; btn.textContent="Checking…"; }
-    api("/api/admin/login","POST",{pin:pin}).then(function(r){
-      if(r && r.ok){
+    var body = {user:user, pass:pass}; if(code) body.code = code;
+    apiRaw("/api/admin/login","POST",body).then(function(res){
+      var r = res.body || {};
+      if(res.status===200 && r.ok){
         admSaveToken(r.token);
-        pinEl.value = "";
-        setAdmTab("overview");
+        pinEl.value = ""; if(codeEl) codeEl.value = ""; if(codeWrap) codeWrap.hidden = true;
+        setAdmTab(r.setup ? "settings" : "overview");
         renderAdmin();
-      } else {
-        if(err){ err.textContent="That PIN is not correct. Try again."; err.hidden=false; }
+        if(r.setup) notify("Create your username and password below","info");
+        return;
       }
-    }).catch(function(ex){
-      if(err){
-        err.textContent = (ex && ex.status===429) ? "Too many attempts. Wait a minute, then try again." : "That PIN is not correct. Try again.";
-        err.hidden=false;
-      }
+      if(r.error==="code-required"){ if(codeWrap) codeWrap.hidden=false; if(codeEl) codeEl.focus(); showErr("Enter the 6-digit code from your authenticator app."); return; }
+      if(r.error==="code-wrong"){ if(codeWrap) codeWrap.hidden=false; if(codeEl){ codeEl.value=""; codeEl.focus(); } showErr("That code is not correct or was already used. Wait for the next code."); return; }
+      if(res.status===429){ showErr(r.error==="locked" ? "Too many attempts. Wait "+Math.max(1,Math.ceil((r.retryAfter||60)/60))+" min, then try again." : "Too many attempts. Wait a minute, then try again."); return; }
+      if(res.status===503){ showErr("Sign-in is turned off on the server. Set ADMIN_PIN in .env and restart the app."); return; }
+      showErr("That username or password is not correct. Try again.");
+    }).catch(function(){
+      showErr("Can't reach the server. Check your connection and try again.");
     }).then(function(){
       if(btn){ btn.disabled=false; btn.textContent="Enter"; }
     });
+  });
+  /* ----- Admin: sign-in & security card ----- */
+  var admSec = null;
+  function secEl(id){ return document.getElementById(id); }
+  function admSecRender(){
+    var s = admSec || {};
+    if(!secEl("admSecCard")) return;
+    secEl("admSecStatus").textContent = s.account ? ("Signed in as "+s.user+" · 2-step verification "+(s.totp?"on":"off")+".") : "No admin account yet — you used the temporary PIN.";
+    secEl("admSecSetup").hidden = !!s.account;
+    secEl("admSecCurLabel").textContent = s.account ? "Current password" : "Current PIN (ADMIN_PIN in .env)";
+    if(s.account && !secEl("admSecUser").value) secEl("admSecUser").value = s.user || "";
+    secEl("admSecSave").textContent = s.account ? "Change sign-in details" : "Create admin account";
+    secEl("admSec2fa").hidden = !s.account;
+    secEl("admSec2faStatus").textContent = s.totp ? "On — sign-in asks for a code from your phone." : "Off";
+    secEl("admSec2faStart").hidden = !!s.totp;
+    secEl("admSec2faOff").hidden = !s.totp;
+    if(s.totp) secEl("admSec2faSetup").hidden = true;
+    secEl("admSecMail").textContent = s.mail ? "On" : "Off — email not set up";
+    secEl("admSecAdminMail").textContent = (s.mail && s.adminEmail) ? "On" : "Off";
+    secEl("admSecBackupMail").textContent = (s.mail && s.backupEmail) ? "On" : "Off";
+  }
+  function admSecLoad(){
+    if(!admToken) return;
+    return admApi("/api/admin/security","POST",{}).then(function(r){ admSec = r; admSecRender(); }).catch(function(){});
+  }
+  var SEC_ERR = {
+    "current-wrong":"The current password (or PIN) is not correct.",
+    "user-invalid":"Use 3–40 letters, numbers, dots, dashes or underscores for the username.",
+    "pass-weak":"Use at least 10 characters, different from the username.",
+    "code-wrong":"That code is not correct. Check the app and your current password.",
+    "start-again":"The setup expired. Start again.",
+    "account-first":"Create your username and password first.",
+    "locked":"Too many attempts. Wait 15 minutes, then try again."
+  };
+  function admSecPost(path, body){
+    return apiRaw(path, "POST", body, {"Authorization":"Bearer "+admToken}).then(function(res){
+      if(res.status===401){ admSaveToken(""); adminShowLogin(); throw new Error("auth"); }
+      if(res.status!==200 || !res.body.ok){ notify(SEC_ERR[res.body.error] || "Something went wrong. Try again.","error"); throw new Error("sec"); }
+      return res.body;
+    });
+  }
+  function ensureQr(cb){
+    if(window.qrcode){ cb(); return; }
+    var sc = document.createElement("script");
+    sc.src = "qrcode.js?v=1.4.4";
+    sc.onload = cb;
+    sc.onerror = function(){ var q=secEl("admSecQr"); if(q) q.textContent = "QR code unavailable — type the key below."; };
+    document.head.appendChild(sc);
+  }
+  if(secEl("admSecSave")) secEl("admSecSave").addEventListener("click", function(){
+    var btn = this;
+    btn.disabled = true;
+    admSecPost("/api/admin/security/account", {user:secEl("admSecUser").value.trim(), pass:secEl("admSecPass").value, current:secEl("admSecCur").value}).then(function(){
+      secEl("admSecPass").value = ""; secEl("admSecCur").value = "";
+      notify("Saved. Sign in with your username and password from now on.","success");
+      return admSecLoad();
+    }).catch(function(){}).then(function(){ btn.disabled = false; });
+  });
+  if(secEl("admSec2faStart")) secEl("admSec2faStart").addEventListener("click", function(){
+    admSecPost("/api/admin/security/totp-start", {}).then(function(r){
+      secEl("admSecSecret").textContent = r.secret.replace(/(.{4})/g,"$1 ").trim();
+      secEl("admSecQr").textContent = "";
+      ensureQr(function(){
+        var q = window.qrcode(0, "M"); q.addData(r.uri); q.make();
+        secEl("admSecQr").innerHTML = q.createSvgTag(4, 2);
+      });
+      secEl("admSec2faSetup").hidden = false; secEl("admSec2faStart").hidden = true;
+      secEl("admSecCode").focus();
+    }).catch(function(){});
+  });
+  if(secEl("admSec2faConfirm")) secEl("admSec2faConfirm").addEventListener("click", function(){
+    admSecPost("/api/admin/security/totp-enable", {current:secEl("admSecCur").value, code:secEl("admSecCode").value.replace(/\D/g,"")}).then(function(){
+      secEl("admSecCode").value = ""; secEl("admSecCur").value = ""; secEl("admSecQr").textContent = ""; secEl("admSecSecret").textContent = "";
+      notify("2-step verification is on.","success");
+      return admSecLoad();
+    }).catch(function(){});
+  });
+  if(secEl("admSec2faDisable")) secEl("admSec2faDisable").addEventListener("click", function(){
+    admSecPost("/api/admin/security/totp-disable", {current:secEl("admSecCur").value, code:secEl("admSecOffCode").value.replace(/\D/g,"")}).then(function(){
+      secEl("admSecOffCode").value = ""; secEl("admSecCur").value = "";
+      notify("2-step verification is off.","info");
+      return admSecLoad();
+    }).catch(function(){});
   });
   (function(){
     var os=document.getElementById("admOrderSearch");

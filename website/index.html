@@ -14,7 +14,7 @@
 <meta property="og:description" content="Thobes cut for Friday, Eid and every day. Sizes 52–58, cash on delivery across Algeria.">
 <meta property="og:type" content="website">
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"Store","name":"Kaser Abd Alaziz","description":"Men's thobe house: thobes, djellabas and shirts. Cash on delivery across Algeria, DZD prices, free shipping over 8,000 DZD.","currenciesAccepted":"DZD","paymentAccepted":"Cash on delivery"}</script>
-  <link rel="stylesheet" href="styles.css?v=20261022J">
+  <link rel="stylesheet" href="styles.css?v=20261027A">
 </head>
 <body class="has-banner">
   <div class="stage"><div class="dream" id="dream" aria-hidden="true"><i class="orb o1"></i><i class="orb o2"></i><i class="orb o3"></i><i class="sheen"></i></div><div class="veil"></div><div class="grain"></div></div>
@@ -167,11 +167,18 @@
         <div class="adm-login-mark">ن</div>
         <p class="adm-kicker">Noor · store manager</p>
         <h1>Welcome back</h1>
-        <p class="adm-login-sub">Enter your PIN to see today's orders, stock and sales.</p>
+        <p class="adm-login-sub">Sign in to see today's orders, stock and sales.</p>
         <form id="adminLoginForm">
-          <label for="adminPin">Admin PIN</label>
+          <label for="adminUser">Username</label>
+          <div class="adm-pin-row"><input type="text" id="adminUser" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="40"></div>
+          <label for="adminPin">Password</label>
           <div class="adm-pin-row"><input type="password" id="adminPin" placeholder="••••••••" autocomplete="current-password"><button class="adm-btn adm-btn-primary" id="adminGo" type="submit">Enter</button></div>
-          <p class="adm-login-error" id="adminLoginError" hidden>That PIN is not correct. Try again.</p>
+          <div id="adminCodeWrap" hidden>
+            <label for="adminCode">Authenticator code</label>
+            <div class="adm-pin-row"><input type="text" id="adminCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456"></div>
+          </div>
+          <p class="adm-login-hint">First sign-in: leave the username empty and enter the ADMIN_PIN from your server.</p>
+          <p class="adm-login-error" id="adminLoginError" hidden>That username or password is not correct. Try again.</p>
         </form>
         <a class="adm-login-back" href="#home">← Back to the store</a>
       </div>
@@ -341,13 +348,46 @@
                 <p class="adm-hint">Delivery rates live in <code>shipping.json</code>. Ask your developer to adjust them, or open the file directly on the server.</p>
               </div>
             </div>
-            <div class="adm-card">
-              <div class="adm-card-head"><div><h2>Data &amp; access</h2><p>Download a backup or sign out of this device.</p></div></div>
-              <div class="adm-inline-actions">
-                <a class="adm-btn adm-btn-ghost" id="adminBackup" href="#">Download backup (JSON)</a>
-                <button class="adm-btn adm-btn-ghost" id="adminOut2" type="button">Log out</button>
+            <div class="adm-grid-2">
+              <div class="adm-card" id="admSecCard">
+                <div class="adm-card-head"><div><h2>Sign-in &amp; security</h2><p id="admSecStatus">Checking…</p></div></div>
+                <p class="adm-sec-alert" id="admSecSetup" hidden>You signed in with the temporary PIN. Create your username and password now — the PIN stops working once you save.</p>
+                <label class="adm-field"><span>Username</span><input type="text" id="admSecUser" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="40"><small>3–40 letters, numbers, dots, dashes or underscores.</small></label>
+                <label class="adm-field"><span>New password</span><input type="password" id="admSecPass" autocomplete="new-password" maxlength="128"><small>At least 10 characters. A short sentence is easy to remember and hard to guess.</small></label>
+                <label class="adm-field"><span id="admSecCurLabel">Current password</span><input type="password" id="admSecCur" autocomplete="current-password" maxlength="128"></label>
+                <button class="adm-btn adm-btn-primary" id="admSecSave" type="button">Save sign-in details</button>
+                <div class="adm-sec-2fa" id="admSec2fa" hidden>
+                  <div class="adm-card-head"><div><h2>2-step verification</h2><p id="admSec2faStatus">Off</p></div></div>
+                  <p class="adm-hint">After your password, sign-in also asks for a 6-digit code from an authenticator app on your phone (Google Authenticator, Microsoft Authenticator or similar).</p>
+                  <button class="adm-btn adm-btn-ghost" id="admSec2faStart" type="button">Turn on 2-step verification</button>
+                  <div id="admSec2faSetup" hidden>
+                    <p class="adm-hint">1 · Scan this code with the app, or type the key by hand.</p>
+                    <div class="adm-qr" id="admSecQr"></div>
+                    <p class="adm-hint">Key: <code id="admSecSecret"></code></p>
+                    <p class="adm-hint">2 · Enter the 6-digit code the app shows, and your current password above.</p>
+                    <label class="adm-field"><span>Code from the app</span><input type="text" id="admSecCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6"></label>
+                    <button class="adm-btn adm-btn-primary" id="admSec2faConfirm" type="button">Confirm and turn on</button>
+                  </div>
+                  <div id="admSec2faOff" hidden>
+                    <label class="adm-field"><span>Code from the app</span><input type="text" id="admSecOffCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6"><small>Also enter your current password above.</small></label>
+                    <button class="adm-btn adm-btn-ghost" id="admSec2faDisable" type="button">Turn off 2-step verification</button>
+                  </div>
+                </div>
               </div>
-              <p class="adm-hint">The admin PIN is set by the <code>ADMIN_PIN</code> environment variable. Change it on the server, not here.</p>
+              <div class="adm-card">
+                <div class="adm-card-head"><div><h2>Data &amp; access</h2><p>Backups, email and this device.</p></div></div>
+                <div class="adm-readonly">
+                  <div><span>Automatic backup</span><b>Every day, last 14 kept on the server</b></div>
+                  <div><span>Backup copy by email</span><b id="admSecBackupMail">—</b></div>
+                  <div><span>Order alerts by email</span><b id="admSecAdminMail">—</b></div>
+                  <div><span>Customer emails</span><b id="admSecMail">—</b></div>
+                </div>
+                <p class="adm-hint">Email settings live in the <code>.env</code> file on the server (SMTP_…, ADMIN_EMAIL, BACKUP_EMAIL).</p>
+                <div class="adm-inline-actions">
+                  <a class="adm-btn adm-btn-ghost" id="adminBackup" href="#">Download backup (JSON)</a>
+                  <button class="adm-btn adm-btn-ghost" id="adminOut2" type="button">Log out</button>
+                </div>
+              </div>
             </div>
           </section>
         </div>
@@ -360,7 +400,19 @@
       <form class="auth-form" id="authForm">
         <div class="field"><label for="authEmail" data-i18n="email">Email</label><input type="email" id="authEmail" required placeholder="you@example.com" autocomplete="email"></div>
         <div class="field"><label for="authPass" data-i18n="pass">Password</label><input type="password" id="authPass" required placeholder="••••••••" autocomplete="current-password"></div>
+        <button type="button" class="foot-link auth-forgot" id="forgotBtn" data-i18n="forgotLink">Forgot password?</button>
         <div class="auth-btn-row"><button type="button" class="pill btn-secondary" id="closeAuthBtn" data-i18n="cancel">Cancel</button><button type="submit" class="pill" data-i18n="enter">Enter</button></div>
+      </form>
+      <form class="auth-form" id="forgotForm" hidden>
+        <p class="auth-help" data-i18n="forgotHelp">Enter your account email. We'll send you a link to choose a new password.</p>
+        <div class="field"><label for="forgotEmail" data-i18n="email">Email</label><input type="email" id="forgotEmail" required placeholder="you@example.com" autocomplete="email"></div>
+        <div class="auth-btn-row"><button type="button" class="pill btn-secondary" id="forgotBack" data-i18n="back">Back</button><button type="submit" class="pill" id="forgotSend" data-i18n="forgotSend">Send link</button></div>
+      </form>
+      <form class="auth-form" id="resetForm" hidden>
+        <p class="auth-help" data-i18n="resetHelp">Choose a new password for your account.</p>
+        <div class="field"><label for="resetPass" data-i18n="resetNew">New password</label><input type="password" id="resetPass" required minlength="8" autocomplete="new-password" placeholder="••••••••"></div>
+        <div class="field"><label for="resetPass2" data-i18n="resetConfirm">Repeat new password</label><input type="password" id="resetPass2" required minlength="8" autocomplete="new-password" placeholder="••••••••"></div>
+        <div class="auth-btn-row"><button type="button" class="pill btn-secondary" id="resetCancel" data-i18n="cancel">Cancel</button><button type="submit" class="pill" id="resetSave" data-i18n="resetSave">Save password</button></div>
       </form>
     </div>
   </div>
@@ -455,6 +507,7 @@
         <div class="co-grid">
           <div class="field full"><label data-i18n="coName">Full name</label><input type="text" id="coNameIn" data-i18n-ph="coNamePh" placeholder="Your name" autocomplete="name"><small class="ferr" id="eName" hidden></small></div>
           <div class="field full"><label data-i18n="coPhone">Phone</label><input type="tel" id="coPhoneIn" data-i18n-ph="coPhonePh" placeholder="05 / 06 / 07…" autocomplete="tel"><small class="ferr" id="ePhone" hidden></small></div>
+          <div class="field full"><label for="coEmailIn" data-i18n="coEmail">Email (optional, for your confirmation)</label><input type="email" id="coEmailIn" placeholder="you@example.com" autocomplete="email"></div>
           <div class="field"><label data-i18n="coWilaya">Wilaya</label><select id="coWilaya"></select><small class="ferr" id="eWilaya" hidden></small></div>
           <div class="field"><label data-i18n="coCommune">Commune</label><input type="text" id="coCommuneIn" data-i18n-ph="coCommunePh" placeholder="Commune"><small class="ferr" id="eCommune" hidden></small></div>
           <div class="field full"><label data-i18n="provider">Delivery company</label><select id="coProvider"></select></div>
@@ -478,6 +531,7 @@
         <div class="co-items" id="coItems"></div>
         <div class="auth-btn-row" style="margin-top:16px"><button type="button" class="pill btn-secondary" id="coCancel" data-i18n="cancel">Cancel</button><button type="button" class="pill" id="coPlace" data-i18n="coPlace">Place order</button></div>
         <button class="pill btn-secondary" id="coWa" type="button" style="width:100%;margin-top:10px" data-i18n="waOrder">WhatsApp order</button>
+        <p class="cart-note co-privacy"><span data-i18n="privacyAgree">Your details are used only to deliver your order.</span> <button type="button" class="foot-link" data-open-privacy data-i18n="privacyLink">Privacy</button></p>
       </div>
       <div id="coDone" hidden>
         <div class="co-done">
@@ -613,6 +667,23 @@
       </div>
     </div>
   </div>
+  <div class="modal-backdrop" id="privacyModal" role="dialog" aria-modal="true" aria-labelledby="privacyTitle">
+    <div class="contact-box privacy-box">
+      <button class="qv-close" id="privacyClose" type="button" aria-label="Close">×</button>
+      <p class="qv-kicker" data-i18n="privacyKicker">Your data</p>
+      <h2 id="privacyTitle" data-i18n="privacyTitle">Privacy notice</h2>
+      <p class="contact-intro" data-i18n="privacyIntro">We collect only what we need to deliver your order, and we never sell it.</p>
+      <h3 data-i18n="privacyCollectT">What we keep</h3>
+      <p class="contact-note" data-i18n="privacyCollect">For an order: your name, phone, wilaya, commune and the items. Optionally your email, for the confirmation. With an account: your email and a protected (hashed) password. We also count page views and bag additions, without cookies and without names.</p>
+      <h3 data-i18n="privacyUseT">Who sees it</h3>
+      <p class="contact-note" data-i18n="privacyUse">The store team, and the delivery company you choose (name, phone and address only). Nothing is used for advertising.</p>
+      <h3 data-i18n="privacyDeviceT">On your device</h3>
+      <p class="contact-note" data-i18n="privacyDevice">Your bag, language and delivery details are saved in your browser so you don't retype them. A sign-in cookie keeps you logged in. There are no advertising or tracking cookies.</p>
+      <h3 data-i18n="privacyRightsT">Your rights</h3>
+      <p class="contact-note" data-i18n="privacyRights">Under Algerian law 18-07 you can ask to see, correct or delete your data. Message us on WhatsApp or through the Contact page.</p>
+      <div class="contact-footer"><button class="pill btn-secondary" id="privacyClose2" type="button" data-i18n="close">Close</button></div>
+    </div>
+  </div>
   <a class="wa-fab" id="waFab" href="#" target="_blank" rel="noopener" aria-label="WhatsApp Kaser Abd Alaziz">
     <span class="wa-fab-mark" aria-hidden="true">WA</span>
   </a>
@@ -626,7 +697,7 @@
     </div>
   </aside>
   <div class="toaster" id="toaster" aria-live="polite"></div>
-  <footer class="foot"><span data-i18n="foot">Noor Thobe House &nbsp;·&nbsp; Algiers &nbsp;·&nbsp; Cash on delivery across Algeria</span> <span class="tdots" id="themeDots"></span> &nbsp;·&nbsp; <button type="button" class="foot-link" id="footContact" data-i18n="contactNav">Contact</button> &nbsp;·&nbsp; <a href="#admin" id="adminLink" class="adminlink">Admin</a></footer>
+  <footer class="foot"><span data-i18n="foot">Noor Thobe House &nbsp;·&nbsp; Algiers &nbsp;·&nbsp; Cash on delivery across Algeria</span> <span class="tdots" id="themeDots"></span> &nbsp;·&nbsp; <button type="button" class="foot-link" id="footContact" data-i18n="contactNav">Contact</button> &nbsp;·&nbsp; <button type="button" class="foot-link" data-open-privacy data-i18n="privacyLink">Privacy</button> &nbsp;·&nbsp; <a href="#admin" id="adminLink" class="adminlink">Admin</a></footer>
   <div class="mobile-menu" id="mobileMenu">
     <a href="#home" data-mnav data-i18n="home">Home</a>
     <a href="#shop" data-mnav data-i18n="navShop">Thobes</a>
@@ -644,6 +715,6 @@
     <button id="tabBag" type="button" data-tab="bag" data-i18n="bag">Bag</button>
   </nav>
   <div class="track" id="scrollTrack"></div>
-<script src="app.js?v=20261022K" defer></script>
+<script src="app.js?v=20261027A" defer></script>
 </body>
 </html>
