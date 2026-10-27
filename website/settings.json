@@ -1,0 +1,38 @@
+{
+  "whatsapp": "213671591935",
+  "siteName": "Kaser Abd Alaziz",
+  "logo": "",
+  "theme": {
+    "preset": "oud",
+    "shade": "#f5f1e8",
+    "fg": "#201814",
+    "rose": "#8a6d3b",
+    "roseDeep": "#4a3b22",
+    "blue": "#2f4f43"
+  },
+  "banner": {
+    "active": true,
+    "text": "Free delivery over 8,000 DZD \u00b7 Cash on delivery in all 58 wilayas",
+    "bg": "#2f4f43",
+    "fg": "#f5f1e8"
+  },
+  "promos": [
+    {
+      "code": "NOOR10",
+      "pct": 10,
+      "active": true,
+      "label": "First order \u221210%"
+    },
+    {
+      "code": "EID15",
+      "pct": 15,
+      "active": false,
+      "label": "Eid campaign"
+    }
+  ],
+  "social": {
+    "instagram": "https://www.instagram.com/noor.thobehouse",
+    "facebook": "https://www.facebook.com/noor.thobehouse",
+    "tiktok": "https://www.tiktok.com/@noor.thobehouse"
+  }
+}

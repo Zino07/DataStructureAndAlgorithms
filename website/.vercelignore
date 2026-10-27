@@ -1,0 +1,32 @@
+# --- runtime state: never ship ---
+backups/
+.backup-*/
+.mirror.lock
+__pycache__/
+*.log
+*.bak
+*.tmp
+counter.json
+logo.json
+tokens.json
+users.json
+orders.json
+reviews.json
+analytics.jsonl
+*.zip
+
+# --- backend source & secrets: must NOT be fetchable from the CDN ---
+# (note: /api/**/*.py must stay deployed — never ignore a bare "*.py")
+# server.py is only the local wrapper; noor_app.py is needed by /api
+/server.py
+/store_v2.py
+/preview.py
+/requirements.txt
+/.env
+/.env.*
+/data/
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+*.pre-refactor.bak
+*.pre-security.bak

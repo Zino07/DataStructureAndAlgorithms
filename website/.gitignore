@@ -14,11 +14,6 @@ users.json
 orders.json
 reviews.json
 analytics.jsonl
-settings.json
-ratelimit.json
-.bootstrap.lock
-*.tmp
-*.corrupt*
 .mirror.lock
 backups/
 .backup-*/

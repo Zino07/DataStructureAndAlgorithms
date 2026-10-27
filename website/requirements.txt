@@ -1,0 +1,2 @@
+# Noor storefront — zero dependencies (Python standard library only).
+# Upstash Redis is reached over HTTPS via urllib; no client package needed.

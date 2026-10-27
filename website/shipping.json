@@ -1,0 +1,116 @@
+{
+ "freeOver": 8000,
+ "providers": {
+  "standard": {
+   "free": true,
+   "home": {
+    "center": 500,
+    "major": 600,
+    "rest": 800,
+    "south": 1200
+   },
+   "name": "Noor Standard",
+   "stop": {
+    "center": 300,
+    "major": 350,
+    "rest": 500,
+    "south": 900
+   }
+  },
+  "maystro": {
+   "free": false,
+   "home": {
+    "center": 550,
+    "major": 700,
+    "rest": 900,
+    "south": 1400
+   },
+   "name": "Maystro",
+   "stop": {
+    "center": 350,
+    "major": 400,
+    "rest": 550,
+    "south": 1000
+   }
+  },
+  "noest": {
+   "free": false,
+   "home": {
+    "center": 600,
+    "major": 750,
+    "rest": 950,
+    "south": 1600
+   },
+   "name": "Noest Express",
+   "stop": {
+    "center": 350,
+    "major": 450,
+    "rest": 600,
+    "south": 1100
+   }
+  },
+  "ems": {
+   "free": false,
+   "home": {
+    "center": 450,
+    "major": 650,
+    "rest": 850,
+    "south": 1300
+   },
+   "name": "EMS Champion Post",
+   "stop": {
+    "center": 450,
+    "major": 600,
+    "rest": 750,
+    "south": 1100
+   }
+  }
+ },
+ "zones": {
+  "center": [
+   9,
+   16,
+   35,
+   42
+  ],
+  "major": [
+   6,
+   10,
+   13,
+   15,
+   18,
+   19,
+   21,
+   22,
+   23,
+   25,
+   26,
+   27,
+   29,
+   30,
+   31,
+   43,
+   44,
+   48
+  ],
+  "south": [
+   1,
+   11,
+   33,
+   37,
+   39,
+   47,
+   49,
+   50,
+   51,
+   52,
+   53,
+   54,
+   55,
+   56,
+   57,
+   58
+  ]
+ },
+ "note": "Editable estimates. Verify against each carrier's current sheet; rest = all other wilayas."
+}
