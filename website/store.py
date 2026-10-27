@@ -91,6 +91,7 @@ _DOC_DEFAULT: Dict[str, Json] = {
     "shipping.json": {},
     "counter.json": {"last": 0},
     "logo.json": {"data": "", "mime": ""},
+    "admin.json": {},
 }
 
 

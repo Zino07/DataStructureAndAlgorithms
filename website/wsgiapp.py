@@ -1,8 +1,7 @@
-"""WSGI adapter for the Noor store (Octenium cPanel Passenger, Gunicorn, Vercel).
+"""WSGI adapter for the Noor store (Octenium cPanel Passenger or Gunicorn).
 
 Exposes ``application`` (and ``app``) so the backend in ``noor_app.py`` runs
-under Phusion Passenger (cPanel "Setup Python App"), Gunicorn/uWSGI, or Vercel
-serverless functions.
+under Phusion Passenger (cPanel "Setup Python App") or Gunicorn/uWSGI.
 """
 from http import HTTPStatus
 import io
@@ -15,7 +14,8 @@ if ROOT not in sys.path:
 
 import noor_app as server  # noqa: E402
 
-# Synchronise JSON recovery mirrors on WSGI worker startup (best-effort).
+# Synchronise the catalog JSON mirrors on WSGI worker startup (best-effort);
+# this also removes customer-data copies left by older versions.
 try:
     server._store.mirror_all()
 except Exception:
@@ -116,11 +116,18 @@ def application(environ, start_response):
         else:
             h._json(405, {"ok": False, "error": "method"})
     except server.StoreError:
+        server.report_error("storage error on %s %s" % (method, path), sys.exc_info())
         captured = {"code": 500, "headers": [("Content-Type", "application/json; charset=utf-8")],
                     "body": b'{"ok": false, "error": "store"}'}
     except (BrokenPipeError, ConnectionResetError):
         captured = {"code": 500, "headers": [("Content-Type", "application/json; charset=utf-8")],
                     "body": b'{"ok": false, "error": "io"}'}
+    except Exception:
+        # Anything unexpected: log it, email the owner (throttled), and answer
+        # with a plain JSON error instead of Passenger's error page.
+        server.report_error("%s %s" % (method, path), sys.exc_info())
+        captured = {"code": 500, "headers": [("Content-Type", "application/json; charset=utf-8")],
+                    "body": b'{"ok": false, "error": "server"}'}
 
     code = captured.get("code", 500)
     headers = captured.get("headers", [("Content-Type", "application/json; charset=utf-8")])

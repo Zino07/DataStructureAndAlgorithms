@@ -41,6 +41,7 @@ import store as _store  # noqa: E402
 from store import (MUTEX, StoreError, analytics_append, analytics_tail,  # noqa: E402
                    load_json, save_json, next_number as store_next_number,
                    transaction, once)
+import mailer  # noqa: E402  (reads SMTP settings from the .env loaded above)
 
 PRODUCTS_FILE = os.path.join(ROOT, "products.json")
 ORDERS_FILE = os.path.join(ROOT, "orders.json")
@@ -51,17 +52,25 @@ COUNTER_FILE = os.path.join(ROOT, "counter.json")
 SHIPPING_FILE = os.path.join(ROOT, "shipping.json")
 SETTINGS_FILE = os.path.join(ROOT, "settings.json")
 LOGO_FILE = os.path.join(ROOT, "logo.json")
+ADMIN_FILE = os.path.join(ROOT, "admin.json")   # SQLite document; never mirrored to disk
 
 # --- Security configuration (fail-closed) ---------------------------------
-# The admin PIN has NO default. A missing, short, or well-known PIN leaves the
-# admin surface DISABLED rather than silently exposing a shipped backdoor.
+# Admin sign-in is a username + password (+ authenticator code once 2-step
+# verification is turned on), stored hashed in the database (admin.json).
+# ADMIN_PIN is only a one-time bootstrap: it works until the owner creates
+# that username and password in Admin -> Settings, then it stops working.
+# The PIN has NO default. A missing, short, or well-known PIN leaves the
+# bootstrap login DISABLED rather than silently exposing a shipped backdoor.
 ADMIN_PIN = os.environ.get("ADMIN_PIN", "")
 _WEAK_PINS = {
     "noor-admin", "luna-admin", "admin", "administrator", "password", "passwd",
     "pass", "pin", "secret", "changeme", "letmein", "1234", "12345", "123456",
     "1234567", "12345678", "123456789", "0000", "00000000", "qwerty",
 }
-ADMIN_ENABLED = len(ADMIN_PIN) >= 8 and ADMIN_PIN.lower() not in _WEAK_PINS
+PIN_USABLE = len(ADMIN_PIN) >= 8 and ADMIN_PIN.lower() not in _WEAK_PINS
+ADMIN_USER_RE = re.compile(r"^[A-Za-z0-9._-]{3,40}$")
+ADMIN_PASS_MIN = 10
+TOTP_ISSUER = os.environ.get("TOTP_ISSUER", "") or "Noor store"
 
 ADMIN_TOKEN_TTL = 12 * 3600
 USER_TOKEN_TTL = 30 * 86400
@@ -85,9 +94,12 @@ LOGIN_LOCKOUT = int(os.environ.get("LOGIN_LOCKOUT", "900") or 900)
 COOKIE_ADMIN = "noor_admin"
 COOKIE_USER = "noor_user"
 
-# Isolated, never-web-served locations for server-side artefacts.
-BACKUP_DIR = os.path.join(ROOT, "data", "backups")
-RATE_FILE = os.path.join(ROOT, "data", "ratelimit.json")
+# Automatic database backups: at most one per BACKUP_EVERY seconds, triggered
+# by normal shop traffic (no cron job needed). BACKUP_EMAIL receives a copy so
+# a backup also exists off the server.
+BACKUP_EVERY = int(os.environ.get("BACKUP_EVERY", "86400") or 86400)
+BACKUP_EMAIL = os.environ.get("BACKUP_EMAIL", "").strip()
+RESET_TTL = 3600
 
 THREAD_SEMAPHORE = threading.BoundedSemaphore(64)
 
@@ -164,6 +176,7 @@ CSP = (
     "style-src 'self' 'unsafe-inline'; font-src 'self'; "
     "script-src 'self'; connect-src 'self'; object-src 'none'; "
     "base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+    + ("; upgrade-insecure-requests" if os.environ.get("BEHIND_TLS", "1") == "1" else "")
 )
 
 
@@ -393,77 +406,27 @@ def sweep_tokens():
 class LoginGuard:
     """Sliding-window brute-force guard for credential endpoints.
 
-    In-memory for speed and thread-safe; persisted best-effort to
-    ``data/ratelimit.json`` so that restarting the process does not clear an
-    active lockout. Keys are ``"<scope>:<client-ip>"``.
+    State lives in SQLite (``store.guard_*``), so every Passenger worker and a
+    restarted process all see the same failures and lockouts. Keys are
+    ``"<scope>:<client-ip>"`` or ``"<scope>:<username>"``.
     """
 
     def __init__(self, max_fails, window, lockout):
         self.max_fails = max(1, int(max_fails))
         self.window = max(1, int(window))
         self.lockout = max(1, int(lockout))
-        self._lock = threading.Lock()
-        self._state = {}
-        self._load()
-
-    def _load(self):
-        try:
-            raw = load_json(RATE_FILE, {})
-            self._state = raw if isinstance(raw, dict) else {}
-        except Exception:
-            self._state = {}
-
-    def _save(self):
-        now = time.time()
-        # Bound memory: keep only keys that still carry information.
-        self._state = {
-            k: v for k, v in self._state.items()
-            if isinstance(v, dict)
-            and (float(v.get("until", 0) or 0) > now
-                 or any(now - float(t) < self.window for t in v.get("fails", [])))
-        }
-        try:
-            save_json(RATE_FILE, self._state)
-        except Exception:
-            pass
-
-    def _prune(self, state, now):
-        state["fails"] = [
-            float(t) for t in state.get("fails", []) if now - float(t) < self.window
-        ]
-        return state
 
     def check(self, key):
         """Return ``(allowed, retry_after_seconds)`` for the given key."""
-        now = time.time()
-        with self._lock:
-            state = self._prune(self._state.get(key, {}), now)
-            self._state[key] = state
-            until = float(state.get("until", 0) or 0)
-            if until > now:
-                return False, int(until - now) + 1
-            if len(state.get("fails", [])) >= self.max_fails:
-                state["until"] = now + self.lockout
-                self._save()
-                return False, self.lockout
-            return True, 0
+        return _store.guard_check(key, self.max_fails, self.window, self.lockout)
 
     def fail(self, key):
         """Record one failed attempt, locking the key out at the threshold."""
-        now = time.time()
-        with self._lock:
-            state = self._prune(self._state.get(key, {}), now)
-            state.setdefault("fails", []).append(now)
-            if len(state["fails"]) >= self.max_fails:
-                state["until"] = now + self.lockout
-            self._state[key] = state
-            self._save()
+        _store.guard_fail(key, self.max_fails, self.window, self.lockout)
 
     def reset(self, key):
         """Clear the failure history for a key after a successful login."""
-        with self._lock:
-            if self._state.pop(key, None) is not None:
-                self._save()
+        _store.guard_reset(key)
 
 
 ADMIN_GUARD = LoginGuard(LOGIN_MAX_FAILS, LOGIN_WINDOW, LOGIN_LOCKOUT)
@@ -577,27 +540,149 @@ def ship_free(provider):
     return bool(cfg.get("free"))
 
 
-RATE = {}
-RATE_LOCK = threading.Lock()
-
-
 def limited(ip, key, maxn, per=60):
-    now = time.time()
-    with RATE_LOCK:
-        e = RATE.get(ip)
-        if not e or now - e[0] > per:
-            e = [now, {}]
-            RATE[ip] = e
-            if len(RATE) > 2000:
-                RATE.clear()
-        e[1][key] = e[1].get(key, 0) + 1
-        return e[1][key] > maxn
+    """Shared fixed-window rate limit (all worker processes see the same count).
+
+    Fails open on a storage error: a broken limiter must not take the shop down;
+    credential endpoints are additionally protected by LoginGuard."""
+    try:
+        return _store.rate_hit("%s:%s" % (key, ip), maxn, per)
+    except StoreError:
+        return False
 
 
 def hash_pass(password, salt, iters=PBKDF2_ITERS):
     return hashlib.pbkdf2_hmac(
         "sha256", password.encode("utf-8"), bytes.fromhex(salt), int(iters)
     ).hex()
+
+
+# --- Admin account + 2-step verification (RFC 6238 TOTP) -------------------
+
+def admin_account():
+    doc = load_json(ADMIN_FILE, {})
+    return doc if isinstance(doc, dict) else {}
+
+
+def admin_has_credentials(acct=None):
+    acct = admin_account() if acct is None else acct
+    return bool(acct.get("user") and acct.get("hash") and acct.get("salt"))
+
+
+def admin_login_available():
+    return admin_has_credentials() or PIN_USABLE
+
+
+def admin_password_ok(acct, password):
+    try:
+        candidate = hash_pass(str(password), acct.get("salt", ""), int(acct.get("iter") or PBKDF2_ITERS))
+    except (ValueError, TypeError):
+        return False
+    return hmac.compare_digest(str(acct.get("hash", "")), candidate)
+
+
+def totp_new_secret():
+    return base64.b32encode(secrets.token_bytes(20)).decode("ascii").rstrip("=")
+
+
+def totp_code(secret, step):
+    key = base64.b32decode(secret + "=" * (-len(secret) % 8), casefold=True)
+    digest = hmac.new(key, struct.pack(">Q", step), hashlib.sha1).digest()
+    off = digest[-1] & 0x0F
+    return "%06d" % ((struct.unpack(">I", digest[off:off + 4])[0] & 0x7FFFFFFF) % 1000000)
+
+
+def totp_match(secret, code, now=None):
+    """Return the matching 30-second step (current +/- 1) or None."""
+    code = re.sub(r"\D", "", str(code or ""))
+    if len(code) != 6 or not secret:
+        return None
+    step = int((now or time.time()) // 30)
+    for s in (step, step - 1, step + 1):
+        try:
+            if hmac.compare_digest(totp_code(secret, s), code):
+                return s
+        except (ValueError, TypeError):
+            return None
+    return None
+
+
+def totp_accept(secret, code):
+    """Verify a code once: a code that was already used is rejected (replay)."""
+    step = totp_match(secret, code)
+    if step is None:
+        return False
+    last = _store.kv_get("totp:last") or 0
+    if step <= int(last):
+        return False
+    _store.kv_set("totp:last", step, 400 * 86400)
+    return True
+
+
+def totp_uri(secret, user, issuer):
+    label = urllib.parse.quote("%s:%s" % (issuer, user))
+    return "otpauth://totp/%s?secret=%s&issuer=%s&algorithm=SHA1&digits=6&period=30" % (
+        label, secret, urllib.parse.quote(issuer))
+
+
+def revoke_sessions(admin=False, email=None, keep_digest=None):
+    with MUTEX():
+        tokens = sweep_tokens()
+        for k in list(tokens):
+            v = tokens[k]
+            if k == keep_digest:
+                continue
+            if (admin and v.get("admin")) or (email and v.get("email") == email):
+                tokens.pop(k, None)
+        save_json(TOKENS_FILE, tokens)
+
+
+# --- Automatic backups ------------------------------------------------------
+
+def _run_backup(send_copy=True):
+    try:
+        path = _store.backup_now()
+    except Exception as exc:
+        sys.stderr.write("BACKUP failed: %s\n" % exc)
+        return ""
+    if send_copy and BACKUP_EMAIL:
+        try:
+            size = os.path.getsize(path)
+            if size <= 15 * 1024 * 1024:
+                with open(path, "rb") as fh:
+                    blob = fh.read()
+                mailer.send(BACKUP_EMAIL, "[%s] Backup %s" % (get_settings().get("siteName", "Noor"),
+                                                             time.strftime("%Y-%m-%d", time.gmtime())),
+                            "Automatic database backup attached (%d KB).\n"
+                            "Keep it private: it contains customer orders.\n" % (size // 1024),
+                            attachment=(os.path.basename(path), blob, "application/gzip"))
+        except OSError as exc:
+            sys.stderr.write("BACKUP email failed: %s\n" % exc)
+    return path
+
+
+def maybe_backup():
+    """Start a background backup if none ran in the last BACKUP_EVERY seconds."""
+    if BACKUP_EVERY <= 0:
+        return
+    try:
+        if _store.kv_set("backup:due", int(time.time()), BACKUP_EVERY, only_if_absent=True):
+            threading.Thread(target=_run_backup, daemon=True).start()
+    except StoreError:
+        pass
+
+
+def report_error(where, exc_info=None):
+    """Log an unexpected error and email the owner (at most every 15 minutes)."""
+    sys.stderr.write("ERROR in %s\n" % where)
+    if exc_info:
+        import traceback
+        traceback.print_exception(*exc_info)
+    try:
+        if _store.kv_set("alert:error", int(time.time()), 900, only_if_absent=True):
+            mailer.error_alert(where, exc_info)
+    except Exception:
+        pass
 
 
 def money(n):
@@ -724,7 +809,7 @@ class Handler(BaseHTTPRequestHandler):
         body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
         self._write(code, "application/json; charset=utf-8", body, extra=extra)
 
-    def _static(self, path):
+    def _static(self, path, versioned=False):
         if path == "/":
             path = "/index.html"
         rel = urllib.parse.unquote(path).lstrip("/")
@@ -758,10 +843,15 @@ class Handler(BaseHTTPRequestHandler):
             self._json(404, {"ok": False, "error": "not found"})
             return
         etag = '"%x-%x"' % (st.st_mtime_ns, st.st_size)
-        if ext in (".css", ".js", ".woff2"):
+        # CSS/JS are cached for a year only when the URL carries a version
+        # (styles.css?v=...); a bare URL is re-checked every visit (cheap 304),
+        # so a design update can never get stuck in visitors' browsers.
+        if ext == ".woff2" or (ext in (".css", ".js") and versioned):
             cache = "public, max-age=31536000, immutable"
+        elif ext in (".css", ".js"):
+            cache = "no-cache"
         elif ext in (".jpg", ".jpeg", ".png", ".webp", ".svg", ".ico"):
-            cache = "public, max-age=2592000, immutable"
+            cache = "public, max-age=604800"
         else:
             cache = "no-store"
         base_headers = (
@@ -904,40 +994,23 @@ class Handler(BaseHTTPRequestHandler):
     def _require_admin(self, data=None, query=None):
         """Single RBAC choke point: True iff a live admin session is presented."""
         entry = self._auth_entry(self._presented_token(data, query))
-        return bool(entry and entry.get("admin") and ADMIN_ENABLED)
+        return bool(entry and entry.get("admin"))
 
     def _admin(self, data, query):
         return self._require_admin(data, query)
-
-    def _server_side_backup(self, payload):
-        """Write an isolated, never-web-served snapshot. Best-effort only.
-
-        The directory (``data/backups``) is outside every static allowlist and
-        holds only ``.json`` files, so it cannot be fetched over HTTP. On a
-        read-only filesystem (Vercel) the write is skipped silently."""
-        try:
-            os.makedirs(BACKUP_DIR, exist_ok=True)
-            name = "noor-%s.json" % time.strftime("%Y%m%d-%H%M%S", time.gmtime())
-            path = os.path.join(BACKUP_DIR, name)
-            tmp = path + ".tmp"
-            with open(tmp, "w", encoding="utf-8") as fh:
-                json.dump(payload, fh, ensure_ascii=False)
-            os.replace(tmp, path)
-            return name
-        except OSError:
-            return ""
 
     @require_admin
     def admin_backup(self, data=None, query=None):
         """GET/POST /api/admin/backup — RBAC enforced by the decorator.
 
         Returns the snapshot to the authenticated admin (the SPA downloads it)
-        and mirrors it to the isolated on-disk backup directory. There is no
-        caller-supplied path, so no traversal primitive exists."""
+        and writes a full compressed database backup to ``data/backups`` (and to
+        BACKUP_EMAIL when set). There is no caller-supplied path, so no
+        traversal primitive exists."""
         payload = {"ok": True, "orders": load_json(ORDERS_FILE, []),
                    "products": [{"id": p.get("id"), "stock": p.get("stock")}
                                 for p in load_json(PRODUCTS_FILE, [])]}
-        self._server_side_backup(payload)
+        threading.Thread(target=_run_backup, daemon=True).start()
         self._json(200, payload)
 
     def do_HEAD(self):
@@ -1098,7 +1171,7 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/api/shipping":
             self._json(200, {"ok": True, "shipping": ship_config()})
             return
-        self._static(parsed.path)
+        self._static(parsed.path, versioned="v=" in parsed.query)
 
     def do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
@@ -1149,7 +1222,9 @@ class Handler(BaseHTTPRequestHandler):
             self._json(200, {"ok": True})
             return
         if parsed.path == "/api/admin/login":
-            if not ADMIN_ENABLED:
+            acct = admin_account()
+            has_creds = admin_has_credentials(acct)
+            if not has_creds and not PIN_USABLE:
                 self._json(503, {"ok": False, "error": "admin-disabled"})
                 return
             if limited(ip, "admin", 10):
@@ -1161,11 +1236,30 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(429, {"ok": False, "error": "locked", "retryAfter": retry},
                            extra=(("Retry-After", str(retry)),))
                 return
-            pin = str(data.get("pin", ""))[:128]
-            if not const_eq(pin, ADMIN_PIN):
-                ADMIN_GUARD.fail(guard_key)
-                self._json(401, {"ok": False, "error": "wrong"})
-                return
+            user = str(data.get("user", ""))[:60].strip()
+            password = str(data.get("pass") or data.get("pin") or "")[:128]
+            if has_creds:
+                user_ok = const_eq(user.lower(), str(acct.get("user", "")).lower())
+                if not (user_ok and admin_password_ok(acct, password)):
+                    ADMIN_GUARD.fail(guard_key)
+                    self._json(401, {"ok": False, "error": "wrong"})
+                    return
+                if acct.get("totp"):
+                    code = str(data.get("code", ""))[:12]
+                    if not code:
+                        # Password was right; ask for the authenticator code.
+                        self._json(401, {"ok": False, "error": "code-required"})
+                        return
+                    if not totp_accept(acct["totp"], code):
+                        ADMIN_GUARD.fail(guard_key)
+                        self._json(401, {"ok": False, "error": "code-wrong"})
+                        return
+            else:
+                # Bootstrap: the .env PIN works only until an account exists.
+                if not const_eq(password, ADMIN_PIN):
+                    ADMIN_GUARD.fail(guard_key)
+                    self._json(401, {"ok": False, "error": "wrong"})
+                    return
             ADMIN_GUARD.reset(guard_key)
             token = secrets.token_hex(TOKEN_BYTES)
             with MUTEX():
@@ -1173,9 +1267,105 @@ class Handler(BaseHTTPRequestHandler):
                 tokens[token_hash(token)] = {"admin": True, "iat": int(time.time()),
                                              "ip": ip, "exp": time.time() + ADMIN_TOKEN_TTL}
                 save_json(TOKENS_FILE, tokens)
-            self._json(200, {"ok": True, "token": token, "expiresIn": ADMIN_TOKEN_TTL},
+            maybe_backup()
+            self._json(200, {"ok": True, "token": token, "expiresIn": ADMIN_TOKEN_TTL,
+                             "setup": not has_creds},
                        extra=(("Set-Cookie",
                                self._cookie_header(COOKIE_ADMIN, token, ADMIN_TOKEN_TTL)),))
+            return
+        if parsed.path == "/api/admin/security":
+            if not self._require_admin(data):
+                self._json(401, {"ok": False, "error": "unauthorized"})
+                return
+            acct = admin_account()
+            self._json(200, {"ok": True, "account": admin_has_credentials(acct),
+                             "user": acct.get("user", ""), "totp": bool(acct.get("totp")),
+                             "mail": mailer.enabled(), "adminEmail": bool(mailer.ADMIN_EMAIL),
+                             "backupEmail": bool(BACKUP_EMAIL)})
+            return
+        if parsed.path in ("/api/admin/security/account", "/api/admin/security/totp-start",
+                           "/api/admin/security/totp-enable", "/api/admin/security/totp-disable"):
+            if not self._require_admin(data):
+                self._json(401, {"ok": False, "error": "unauthorized"})
+                return
+            guard_key = "admin:" + ip
+            allowed, retry = ADMIN_GUARD.check(guard_key)
+            if not allowed:
+                self._json(429, {"ok": False, "error": "locked", "retryAfter": retry})
+                return
+            acct = admin_account()
+            has_creds = admin_has_credentials(acct)
+            current = str(data.get("current", ""))[:128]
+            # Every security change re-checks the current password (or the
+            # bootstrap PIN before an account exists).
+            current_ok = admin_password_ok(acct, current) if has_creds else \
+                (PIN_USABLE and const_eq(current, ADMIN_PIN))
+            my_digest = token_hash(self._presented_token(data))
+            if parsed.path.endswith("/account"):
+                if not current_ok:
+                    ADMIN_GUARD.fail(guard_key)
+                    self._json(401, {"ok": False, "error": "current-wrong"})
+                    return
+                user = str(data.get("user", "")).strip()
+                new_pass = str(data.get("pass", ""))[:128]
+                if not ADMIN_USER_RE.match(user):
+                    self._json(400, {"ok": False, "error": "user-invalid"})
+                    return
+                if len(new_pass) < ADMIN_PASS_MIN or new_pass.lower() in _WEAK_PINS \
+                        or new_pass.lower() == user.lower():
+                    self._json(400, {"ok": False, "error": "pass-weak"})
+                    return
+                salt = secrets.token_hex(16)
+                with MUTEX():
+                    acct = admin_account()
+                    acct.update({"user": user, "salt": salt, "iter": PBKDF2_ITERS,
+                                 "hash": hash_pass(new_pass, salt), "updated": int(time.time())})
+                    save_json(ADMIN_FILE, acct)
+                revoke_sessions(admin=True, keep_digest=my_digest)
+                self._json(200, {"ok": True, "user": user})
+                return
+            if parsed.path.endswith("/totp-start"):
+                if not has_creds:
+                    self._json(409, {"ok": False, "error": "account-first"})
+                    return
+                secret = totp_new_secret()
+                _store.kv_set("totp:pending:" + my_digest, secret, 900)
+                self._json(200, {"ok": True, "secret": secret,
+                                 "uri": totp_uri(secret, acct.get("user", "admin"),
+                                                 get_settings().get("siteName") or TOTP_ISSUER)})
+                return
+            if parsed.path.endswith("/totp-enable"):
+                secret = _store.kv_get("totp:pending:" + my_digest)
+                if not secret or not has_creds:
+                    self._json(409, {"ok": False, "error": "start-again"})
+                    return
+                if not current_ok or totp_match(secret, data.get("code")) is None:
+                    ADMIN_GUARD.fail(guard_key)
+                    self._json(401, {"ok": False, "error": "code-wrong"})
+                    return
+                _store.kv_take("totp:pending:" + my_digest)
+                with MUTEX():
+                    acct = admin_account()
+                    acct["totp"] = secret
+                    acct["updated"] = int(time.time())
+                    save_json(ADMIN_FILE, acct)
+                revoke_sessions(admin=True, keep_digest=my_digest)
+                self._json(200, {"ok": True, "totp": True})
+                return
+            # totp-disable
+            if not acct.get("totp"):
+                self._json(200, {"ok": True, "totp": False})
+                return
+            if not current_ok or totp_match(acct["totp"], data.get("code")) is None:
+                ADMIN_GUARD.fail(guard_key)
+                self._json(401, {"ok": False, "error": "code-wrong"})
+                return
+            with MUTEX():
+                acct = admin_account()
+                acct.pop("totp", None)
+                acct["updated"] = int(time.time())
+                save_json(ADMIN_FILE, acct)
+            self._json(200, {"ok": True, "totp": False})
             return
         if parsed.path in ("/api/auth/logout", "/api/admin/logout"):
             token = self._presented_token(data)
@@ -1201,6 +1391,7 @@ class Handler(BaseHTTPRequestHandler):
             if status not in STATUSES:
                 self._json(400, {"ok": False, "error": "invalid"})
                 return
+            changed = None
             with transaction():
                 orders = load_json(ORDERS_FILE, [])
                 found = False
@@ -1233,11 +1424,59 @@ class Handler(BaseHTTPRequestHandler):
                         hist = o.get("history") if isinstance(o.get("history"), list) else []
                         hist.append({"from": cur, "to": status, "ts": int(time.time())})
                         o["history"] = hist[-20:]
+                        changed = dict(o)
                 if not found:
                     self._json(404, {"ok": False, "error": "not-found"})
                     return
                 save_json(ORDERS_FILE, orders)
+            if changed and changed.get("email"):
+                mailer.order_status(changed, status, get_settings().get("siteName", "Noor"))
             self._json(200, {"ok": True})
+            return
+        if parsed.path == "/api/auth/forgot":
+            if limited(ip, "forgot", 5, 600):
+                self._json(429, {"ok": False, "error": "rate"})
+                return
+            email = clean(data.get("email"), 120).lower()
+            if not mailer.valid_email(email):
+                self._json(400, {"ok": False, "error": "invalid"})
+                return
+            # Same answer whether or not the account exists (no enumeration).
+            users = load_json(USERS_FILE, {})
+            if mailer.enabled() and isinstance(users, dict) and email in users \
+                    and _store.kv_set("resetmail:" + email, 1, 120, only_if_absent=True):
+                token = secrets.token_urlsafe(32)
+                _store.kv_set("reset:" + token_hash(token), {"email": email}, RESET_TTL)
+                base = mailer.SITE_URL or ("https://" + (self.headers.get("Host") or "").strip())
+                mailer.password_reset(email, "%s/#reset=%s" % (base, token),
+                                      get_settings().get("siteName", "Noor"))
+            self._json(200, {"ok": True, "mail": mailer.enabled()})
+            return
+        if parsed.path == "/api/auth/reset":
+            if limited(ip, "reset", 10, 600):
+                self._json(429, {"ok": False, "error": "rate"})
+                return
+            token = str(data.get("token", ""))[:128]
+            password = str(data.get("pass", ""))[:128]
+            if len(password) < 8:
+                self._json(400, {"ok": False, "error": "weak"})
+                return
+            rec = _store.kv_take("reset:" + token_hash(token)) if token else None
+            email = rec.get("email", "") if isinstance(rec, dict) else ""
+            if not email:
+                self._json(400, {"ok": False, "error": "expired"})
+                return
+            with MUTEX():
+                users = load_json(USERS_FILE, {})
+                if not isinstance(users, dict) or email not in users:
+                    self._json(400, {"ok": False, "error": "expired"})
+                    return
+                salt = secrets.token_hex(16)
+                users[email] = {"salt": salt, "hash": hash_pass(password, salt), "iter": PBKDF2_ITERS}
+                save_json(USERS_FILE, users)
+            revoke_sessions(email=email)
+            AUTH_GUARD.reset("auth:" + ip)
+            self._json(200, {"ok": True, "email": email})
             return
         if parsed.path in ("/api/auth/register", "/api/auth/login"):
             is_login = parsed.path.endswith("login")
@@ -1328,6 +1567,13 @@ class Handler(BaseHTTPRequestHandler):
             if len(items) > MAX_ORDER_LINES:
                 self._json(400, {"ok": False, "error": "too-many-lines"})
                 return
+            # Signed-in customers: the order belongs to the session's email, not
+            # to whatever the browser sent. Guests may add an email for the
+            # confirmation message.
+            session_email = self._user(self._presented_token(data))
+            guest_email = clean(data.get("email"), 120).lower()
+            order_email = session_email or (guest_email if mailer.valid_email(guest_email) else "")
+            placed = {}
             # Idempotency key: prefer the HTTP header, fall back to the JSON body.
             idem = str(self.headers.get("Idempotency-Key") or data.get("idem") or "")
             idem = re.sub(r"[^A-Za-z0-9:_-]", "", idem)[:64]
@@ -1395,8 +1641,11 @@ class Handler(BaseHTTPRequestHandler):
                                        "wilaya": wilaya, "method": method, "provider": provider,
                                        "ts": int(time.time()), "promo": promo_code if promo else "",
                                        "idem": idem, "lines": lines,
-                                       "email": clean(data.get("email"), 120).lower()})
-                        save_json(ORDERS_FILE, orders[-500:])
+                                       "email": order_email})
+                        # Every order is kept: they are business records. (The
+                        # old version silently dropped all but the last 500.)
+                        save_json(ORDERS_FILE, orders)
+                        placed["order"] = orders[-1]
                         return {"num": num, "items": count, "total": money(total_num)}
 
                     if idem:
@@ -1417,9 +1666,16 @@ class Handler(BaseHTTPRequestHandler):
                 elif msg == "bad-item":
                     self._json(400, {"ok": False, "error": "bad-item"})
                 else:
-                    sys.stderr.write("Order transaction rolled back: %s\n" % msg)
+                    report_error("order transaction rolled back: %s" % msg)
                     self._json(500, {"ok": False, "error": "transaction-failed"})
                 return
+            order = placed.get("order")
+            if order:   # a duplicate retry re-sends nothing
+                shop = get_settings().get("siteName", "Noor")
+                if order.get("email"):
+                    mailer.order_confirmation(order, shop)
+                mailer.admin_new_order(order, shop)
+                maybe_backup()
             self._json(200, {"ok": True, **payload})
             return
         if parsed.path == "/api/admin/settings":
@@ -1736,10 +1992,11 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     port = int(os.environ.get("PORT", "8124"))
     host = os.environ.get("HOST", "127.0.0.1")
-    if not ADMIN_ENABLED:
+    if not admin_login_available():
         sys.stderr.write(
-            "SECURITY: admin API is DISABLED — set a strong ADMIN_PIN "
-            "(>= 8 chars, not a known default) to enable /api/admin/*.\n")
+            "SECURITY: admin sign-in is DISABLED — set a strong ADMIN_PIN "
+            "(>= 8 chars, not a known default) once, then create the admin "
+            "account in Admin -> Settings.\n")
     # Re-sync the JSON recovery mirrors from the authoritative backend so a
     # later database loss cannot re-seed from a stale/partial catalog.
     try:
@@ -1755,7 +2012,7 @@ def main():
     signal.signal(signal.SIGTERM, _term)
     signal.signal(signal.SIGINT, _term)
     print("Noor listening on http://%s:%d/  (admin=%s, tls=%s)" % (
-        host, port, "enabled" if ADMIN_ENABLED else "DISABLED",
+        host, port, "enabled" if admin_login_available() else "DISABLED",
         "on" if ENABLE_HSTS else "off"), flush=True)
     server.serve_forever()
 
