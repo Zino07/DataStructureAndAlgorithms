@@ -1,8 +1,8 @@
 """Noor storage layer — transactional, typed, single public entry point.
 
-Backend is selected by environment (unchanged contract):
-  UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN set -> Redis (serverless)
-  otherwise                                            -> SQLite (WAL) on disk
+Single backend: SQLite (WAL) on disk at ``data/noor.sqlite3`` (or ``NOOR_DB``).
+The site is hosted on Octenium cPanel only; the former Vercel/Upstash Redis
+backend was removed so there is one place where data lives.
 
 Why this replaces the previous file-KV layer
 --------------------------------------------
@@ -19,9 +19,12 @@ This module makes the store the single owner of consistency:
   * ``once(key, fn)`` gives atomic, durable idempotency for POST retries.
   * Corruption recovery: ``PRAGMA quick_check`` on boot; a damaged database is
     quarantined and rebuilt from the JSON files, then their ``.bak`` siblings.
-  * JSON files under ROOT keep being mirrored atomically (temp + ``os.replace``
-    under a lock) so the CDN and human inspection still work, but they are a
-    read-mirror, never the source of truth.
+  * Catalog JSON files under ROOT (products, settings, shipping) keep being
+    mirrored atomically (temp + ``os.replace`` under a lock) as a read-mirror
+    and seed. Customer data (orders, users, tokens, reviews) is NOT mirrored:
+    it lives only in SQLite and in the compressed backups (``backup_now``).
+  * Rate limits and login lockouts live in SQLite too, so every Passenger
+    worker process shares one view of them.
 
 Public API:
   load_json(path, default)  save_json(path, data)
@@ -32,20 +35,25 @@ Added (opt-in):
   transaction()             atomic cross-document unit of work
   once(key, fn)             idempotent mutation
   idem_get(key)             health()
+  rate_hit(key, maxn, per)  shared fixed-window rate limit
+  guard_check/fail/reset    shared login lockout
+  kv_get/kv_set/kv_take     small expiring key-value records
+  backup_now()              compressed online SQLite backup
 """
 
 from __future__ import annotations
 
 import contextlib
+import gzip
 import json
 import os
+import random
 import re
 import secrets
+import shutil
 import sqlite3
 import threading
 import time
-import urllib.error
-import urllib.request
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
@@ -96,19 +104,20 @@ IDEM_TTL = 24 * 3600
 INVOICE_PREFIX = os.environ.get("INVOICE_PREFIX", "NOOR")
 SCHEMA_VERSION = 2
 
-RURL = os.environ.get("UPSTASH_REDIS_REST_URL", "").rstrip("/")
-RTOKEN = os.environ.get("UPSTASH_REDIS_REST_TOKEN", "")
-USE_REDIS = bool(RURL and RTOKEN)
-PREFIX = os.environ.get("STORE_PREFIX", "noor:")
-
 _DB_ENV = os.environ.get("NOOR_DB") or os.environ.get("STORE_DB")
 if _DB_ENV:
     DB_PATH = os.path.abspath(_DB_ENV)
-elif os.environ.get("VERCEL"):
-    # Vercel's filesystem is read-only except /tmp; keep the DB out of ROOT.
-    DB_PATH = os.path.join("/tmp", "noor.sqlite3")
 else:
     DB_PATH = os.path.join(ROOT, "data", "noor.sqlite3")
+
+BACKUP_DIR = os.path.join(os.path.dirname(DB_PATH), "backups")
+BACKUP_KEEP = max(1, int(os.environ.get("BACKUP_KEEP", "14") or 14))
+
+# Documents mirrored to ROOT as human-readable JSON and used to seed a fresh
+# database. Customer data is deliberately absent; MIRROR_ALL=1 restores the old
+# behaviour of mirroring every document.
+_CATALOG_DOCS = frozenset({"products.json", "settings.json", "shipping.json"})
+MIRROR_ALL = os.environ.get("MIRROR_ALL", "0") == "1"
 
 # The ``*.json`` files are the recovery mirror for the local database and live
 # in ROOT beside server.py.  A database redirected outside ROOT (a test or a
@@ -139,11 +148,8 @@ def MUTEX() -> threading.RLock:
 
     SQLite supplies the real cross-process serialisation (WAL + BEGIN
     IMMEDIATE); this lock only keeps mirror writes and legacy read-modify-write
-    call sites from racing inside one interpreter. Redis uses a distributed
-    lock instead (see :class:`_RedisBackend`).
+    call sites from racing inside one interpreter.
     """
-    if USE_REDIS:
-        return _REDIS.lock()  # type: ignore[return-value]
     return _THREAD_MUTEX
 
 
@@ -265,8 +271,23 @@ _DDL = (
     " key TEXT PRIMARY KEY,"
     " value TEXT NOT NULL,"
     " created REAL NOT NULL)",
+    "CREATE TABLE IF NOT EXISTS rate ("
+    " key TEXT PRIMARY KEY,"
+    " start REAL NOT NULL,"
+    " n INTEGER NOT NULL)",
+    "CREATE TABLE IF NOT EXISTS guard ("
+    " key TEXT PRIMARY KEY,"
+    " fails TEXT NOT NULL,"
+    " until REAL NOT NULL,"
+    " updated REAL NOT NULL)",
+    "CREATE TABLE IF NOT EXISTS kv ("
+    " key TEXT PRIMARY KEY,"
+    " value TEXT NOT NULL,"
+    " exp REAL NOT NULL)",
     "CREATE INDEX IF NOT EXISTS events_id_desc ON events (id DESC)",
     "CREATE INDEX IF NOT EXISTS idem_created ON idem (created)",
+    "CREATE INDEX IF NOT EXISTS rate_start ON rate (start)",
+    "CREATE INDEX IF NOT EXISTS kv_exp ON kv (exp)",
 )
 
 
@@ -461,6 +482,13 @@ class _SqliteBackend:
         except ValueError:
             return default
 
+    def has_doc(self, name: str) -> bool:
+        try:
+            return self._healed(lambda: self.conn().execute(
+                "SELECT 1 FROM docs WHERE name=?", (name,)).fetchone()) is not None
+        except sqlite3.Error:
+            return False
+
     def put_doc(self, name: str, data: Json) -> None:
         payload = json.dumps(data, ensure_ascii=False)
         sql = ("INSERT INTO docs (name, json, updated) VALUES (?, ?, ?) "
@@ -580,181 +608,175 @@ class _SqliteBackend:
                            documents=int(docs), events=int(ev))
 
 
-# --------------------------------------------------------------------------- #
-# Redis backend — serverless, lock-serialised, atomic single-key writes
-# --------------------------------------------------------------------------- #
+    # -- shared rate limits / login lockout ------------------------------ #
 
-_UNLOCK_LUA = (
-    "if redis.call('get', KEYS[1]) == ARGV[1] then "
-    "return redis.call('del', KEYS[1]) else return 0 end"
-)
+    def _prune_small_tables(self, conn: sqlite3.Connection, now: float) -> None:
+        conn.execute("DELETE FROM rate WHERE start < ?", (now - 6 * 3600,))
+        conn.execute("DELETE FROM guard WHERE until < ? AND updated < ?", (now, now - 6 * 3600))
+        conn.execute("DELETE FROM kv WHERE exp < ?", (now,))
 
+    def rate_hit(self, key: str, maxn: int, per: float) -> bool:
+        """Count one hit for ``key`` in a fixed window. True when over ``maxn``."""
+        now = time.time()
 
-class _RedisBackend:
-    name = "redis"
+        def _hit() -> bool:
+            with self.transaction() as conn:
+                row = conn.execute("SELECT start, n FROM rate WHERE key=?", (key,)).fetchone()
+                if row is None or now - float(row[0]) > per:
+                    conn.execute(
+                        "INSERT INTO rate (key, start, n) VALUES (?, ?, 1) "
+                        "ON CONFLICT(key) DO UPDATE SET start=excluded.start, n=1",
+                        (key, now))
+                    n = 1
+                else:
+                    n = int(row[1]) + 1
+                    conn.execute("UPDATE rate SET n=? WHERE key=?", (n, key))
+                if random.random() < 0.01:
+                    self._prune_small_tables(conn, now)
+                return n > maxn
+        return self._healed(_hit)
 
-    def __init__(self, url: str, token: str) -> None:
-        self.url = url
-        self.token = token
-        self._locks = threading.local()
-
-    def _call(self, *args: Json) -> Json:
-        body = json.dumps(list(args)).encode("utf-8")
-        req = urllib.request.Request(
-            self.url,
-            data=body,
-            method="POST",
-            headers={"Authorization": "Bearer " + self.token, "Content-Type": "application/json"},
-        )
+    def _guard_row(self, conn: sqlite3.Connection, key: str, window: float, now: float) -> Tuple[List[float], float]:
+        row = conn.execute("SELECT fails, until FROM guard WHERE key=?", (key,)).fetchone()
+        if row is None:
+            return [], 0.0
         try:
-            with urllib.request.urlopen(req, timeout=8) as resp:
-                out = json.loads(resp.read().decode("utf-8"))
-        except (urllib.error.URLError, OSError, ValueError) as exc:
-            raise StoreError("redis: %s" % exc) from exc
-        if isinstance(out, dict) and out.get("error"):
-            raise StoreError("redis: %s" % out["error"])
-        return out.get("result") if isinstance(out, dict) else None
+            fails = [float(t) for t in json.loads(row[0]) if now - float(t) < window]
+        except (ValueError, TypeError):
+            fails = []
+        return fails, float(row[1] or 0)
 
-    def _key(self, name: str) -> str:
-        return PREFIX + name
+    def _guard_put(self, conn: sqlite3.Connection, key: str, fails: List[float], until: float, now: float) -> None:
+        conn.execute(
+            "INSERT INTO guard (key, fails, until, updated) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET fails=excluded.fails, until=excluded.until, "
+            "updated=excluded.updated",
+            (key, json.dumps(fails[-50:]), until, now))
 
-    # distributed, re-entrant, CAS-released lock
-    def lock(self, ttl: int = 15, wait: float = 8.0) -> "threading.RLock":
-        outer = self
+    def guard_check(self, key: str, max_fails: int, window: float, lockout: float) -> Tuple[bool, int]:
+        now = time.time()
 
-        class _ReentrantRedisLock:
-            def __enter__(self_inner) -> "_ReentrantRedisLock":  # noqa: N805
-                depth = getattr(outer._locks, "depth", 0)
-                if depth > 0:
-                    outer._locks.depth = depth + 1
-                    return self_inner
-                token = secrets.token_hex(8)
-                deadline = time.time() + wait
-                while True:
-                    if outer._call("SET", PREFIX + "mutex", token, "NX", "EX", str(ttl)) == "OK":
-                        outer._locks.depth = 1
-                        outer._locks.token = token
-                        return self_inner
-                    if time.time() > deadline:
-                        raise StoreError("lock timeout")
-                    time.sleep(0.05)
+        def _check() -> Tuple[bool, int]:
+            with self.transaction() as conn:
+                fails, until = self._guard_row(conn, key, window, now)
+                if until > now:
+                    return False, int(until - now) + 1
+                if len(fails) >= max_fails:
+                    self._guard_put(conn, key, fails, now + lockout, now)
+                    return False, int(lockout)
+                return True, 0
+        return self._healed(_check)
 
-            def __exit__(self_inner, *exc: Any) -> bool:  # noqa: N805
-                depth = getattr(outer._locks, "depth", 0)
-                if depth > 1:
-                    outer._locks.depth = depth - 1
-                    return False
-                token = getattr(outer._locks, "token", "")
-                try:
-                    outer._call("EVAL", _UNLOCK_LUA, "1", PREFIX + "mutex", token)
-                except StoreError:
-                    pass
-                outer._locks.depth = 0
-                return False
+    def guard_fail(self, key: str, max_fails: int, window: float, lockout: float) -> None:
+        now = time.time()
 
-        return _ReentrantRedisLock()  # type: ignore[return-value]
+        def _fail() -> None:
+            with self.transaction() as conn:
+                fails, until = self._guard_row(conn, key, window, now)
+                fails.append(now)
+                if len(fails) >= max_fails:
+                    until = now + lockout
+                self._guard_put(conn, key, fails, until, now)
+        self._healed(_fail)
 
-    @contextlib.contextmanager
-    def transaction(self) -> Iterator[Any]:
-        """Redis has no cross-key ACID here; serialise on the distributed lock."""
-        with self.lock():
-            yield None
+    def guard_reset(self, key: str) -> None:
+        def _reset() -> None:
+            with self.transaction() as conn:
+                conn.execute("DELETE FROM guard WHERE key=?", (key,))
+        self._healed(_reset)
 
-    # documents are a single JSON string per key -> replace is one atomic SET
-    def get_doc(self, name: str, default: Json) -> Json:
-        raw = self._call("GET", self._key(name))
-        if raw is None:
-            data = _load_with_bak(name, default)
-            if data is not None:
-                self._call("SET", self._key(name), json.dumps(data, ensure_ascii=False))
-            return data
+    # -- small expiring key/value records --------------------------------- #
+
+    def kv_get(self, key: str) -> Optional[Json]:
+        row = self._healed(lambda: self.conn().execute(
+            "SELECT value, exp FROM kv WHERE key=?", (key,)).fetchone())
+        if row is None or float(row[1]) <= time.time():
+            return None
         try:
-            return json.loads(raw)
+            return json.loads(row[0])
         except ValueError:
-            return default
+            return None
 
-    def put_doc(self, name: str, data: Json) -> None:
-        self._call("SET", self._key(name), json.dumps(data, ensure_ascii=False))
+    def kv_set(self, key: str, value: Json, ttl: float, only_if_absent: bool = False) -> bool:
+        """Store ``value`` for ``ttl`` seconds. With ``only_if_absent`` the write
+        happens only when no live record exists; returns whether it was written."""
+        now = time.time()
+        payload = json.dumps(value, ensure_ascii=False)
 
-    def next_number(self) -> int:
-        key = self._key("counter.json")
-        if self._call("GET", key) is None:
-            floor = self._sequence_floor()
-            self._call("SET", key, str(floor), "NX")
+        def _set() -> bool:
+            with self.transaction() as conn:
+                if only_if_absent:
+                    row = conn.execute("SELECT exp FROM kv WHERE key=?", (key,)).fetchone()
+                    if row is not None and float(row[0]) > now:
+                        return False
+                conn.execute(
+                    "INSERT INTO kv (key, value, exp) VALUES (?, ?, ?) "
+                    "ON CONFLICT(key) DO UPDATE SET value=excluded.value, exp=excluded.exp",
+                    (key, payload, now + ttl))
+                return True
+        return self._healed(_set)
+
+    def kv_take(self, key: str) -> Optional[Json]:
+        """Atomically read and delete a live record (single-use tokens)."""
+        now = time.time()
+
+        def _take() -> Optional[Json]:
+            with self.transaction() as conn:
+                row = conn.execute("SELECT value, exp FROM kv WHERE key=?", (key,)).fetchone()
+                if row is None:
+                    return None
+                conn.execute("DELETE FROM kv WHERE key=?", (key,))
+                if float(row[1]) <= now:
+                    return None
+                try:
+                    return json.loads(row[0])
+                except ValueError:
+                    return None
+        return self._healed(_take)
+
+    # -- backup ----------------------------------------------------------- #
+
+    def backup_now(self, directory: str, keep: int) -> str:
+        """Consistent online copy of the database, gzip-compressed.
+
+        Uses SQLite's backup API, so it is safe while the shop is taking
+        orders. Keeps the newest ``keep`` files and returns the new path."""
+        os.makedirs(directory, exist_ok=True)
+        stamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
+        raw = os.path.join(directory, "noor-%s-%s.sqlite3" % (stamp, secrets.token_hex(3)))
+        dst = sqlite3.connect(raw)
         try:
-            return int(self._call("INCR", key))
-        except (TypeError, ValueError) as exc:
-            raise StoreError("counter: %s" % exc) from exc
-
-    def _sequence_floor(self) -> int:
-        orders = self.get_doc("orders.json", [])
-        floor = 0
-        pattern = re.compile(r"^%s-(\d+)$" % re.escape(INVOICE_PREFIX))
-        if isinstance(orders, list):
-            for order in orders:
-                if isinstance(order, dict):
-                    m = pattern.match(str(order.get("num", "")))
-                    if m:
-                        floor = max(floor, int(m.group(1)))
-        return floor
-
-    def analytics_append(self, ev: Json) -> None:
-        key = self._key("analytics")
-        self._call("RPUSH", key, json.dumps(ev, ensure_ascii=False))
-        self._call("LTRIM", key, -ANALYTICS_MAX, -1)
-
-    def analytics_tail(self, n: int) -> List[Json]:
-        raw = self._call("LRANGE", self._key("analytics"), -max(0, int(n)), -1) or []
-        out: List[Json] = []
-        for item in raw:
+            src = _sqlite_connect(self.path)
             try:
-                out.append(json.loads(item))
-            except ValueError:
-                continue
+                src.backup(dst)
+            finally:
+                src.close()
+        finally:
+            dst.close()
+        out = raw + ".gz"
+        with open(raw, "rb") as fin, gzip.open(out + ".part", "wb", 6) as fout:
+            shutil.copyfileobj(fin, fout)
+        os.replace(out + ".part", out)
+        os.remove(raw)
+        try:
+            os.chmod(out, 0o600)
+        except OSError:
+            pass
+        old = sorted(f for f in os.listdir(directory)
+                     if f.startswith("noor-") and f.endswith(".sqlite3.gz"))
+        for f in old[:-keep]:
+            try:
+                os.remove(os.path.join(directory, f))
+            except OSError:
+                pass
         return out
 
-    def idem_get(self, key: str) -> Optional[Json]:
-        if not key:
-            return None
-        raw = self._call("GET", self._key("idem:" + key))
-        if raw is None:
-            return None
-        try:
-            return json.loads(raw)
-        except ValueError:
-            return None
-
-    def idem_claim(self, key: str) -> bool:
-        if not key:
-            return True
-        return self._call("SET", self._key("idem:" + key), "", "NX", "EX", str(IDEM_TTL)) == "OK"
-
-    def idem_settle(self, key: str, value: Json) -> None:
-        if not key:
-            return
-        self._call("SET", self._key("idem:" + key), json.dumps(value, ensure_ascii=False),
-                   "EX", str(IDEM_TTL))
-
-    def health(self) -> "StoreHealth":
-        try:
-            self._call("PING")
-            ok = True
-        except StoreError:
-            ok = False
-        return StoreHealth(backend=self.name, target=self.url, healthy=ok)
-
 
 # --------------------------------------------------------------------------- #
-# Backend selection (single owner of the module-level state)
+# Backend (single owner of the module-level state)
 # --------------------------------------------------------------------------- #
 
-_BACKEND: Any
-if USE_REDIS:
-    _REDIS = _RedisBackend(RURL, RTOKEN)
-    _BACKEND = _REDIS
-else:
-    _REDIS = None  # type: ignore[assignment]
-    _BACKEND = _SqliteBackend(DB_PATH)
+_BACKEND = _SqliteBackend(DB_PATH)
 
 
 # --------------------------------------------------------------------------- #
@@ -762,8 +784,12 @@ else:
 # --------------------------------------------------------------------------- #
 
 
+def _mirrored(name: str) -> bool:
+    return MIRROR_ENABLED and name in _DOC_NAMES and (MIRROR_ALL or name in _CATALOG_DOCS)
+
+
 def _mirror(name: str, data: Json) -> None:
-    if name not in _DOC_NAMES or not MIRROR_ENABLED:
+    if not _mirrored(name):
         return
     path = os.path.join(ROOT, name)
     payload = json.dumps(data, ensure_ascii=False, indent=1).encode("utf-8")
@@ -789,7 +815,7 @@ def _mirror(name: str, data: Json) -> None:
 
 
 def mirror_all() -> int:
-    """Rewrite every JSON mirror from the authoritative backend.
+    """Rewrite the catalog JSON mirrors from the authoritative backend.
 
     The ``*.json`` files next to the backend are a read-only convenience and
     disaster-recovery surface: ``_seed_missing`` re-seeds a lost/fresh database
@@ -799,11 +825,23 @@ def mirror_all() -> int:
     this at startup to make drift self-healing.  Existing ``*.bak`` files are
     left untouched so they remain a second recovery copy.  Returns the number
     of documents re-synced.
+
+    Customer documents (orders, users, tokens, reviews, ...) are not mirrored.
+    Copies left behind by older versions are removed once the database holds
+    the document, so personal data exists only in SQLite and its backups.
     """
     written = 0
     if not MIRROR_ENABLED:
         return written
     for name in sorted(_DOC_NAMES):
+        if not _mirrored(name):
+            if _BACKEND.has_doc(name):
+                for suffix in ("", ".bak"):
+                    try:
+                        os.remove(os.path.join(ROOT, name + suffix))
+                    except OSError:
+                        pass
+            continue
         try:
             data = _BACKEND.get_doc(name, _DOC_DEFAULT[name])
         except StoreError:
@@ -874,6 +912,40 @@ def once(key: str, fn: Callable[[], Json]) -> Tuple[Json, bool]:
         value = fn()
         _BACKEND.idem_settle(key, value)
         return value, False
+
+
+def rate_hit(key: str, maxn: int, per: float = 60) -> bool:
+    """Shared fixed-window limiter. True when ``key`` is over ``maxn`` hits."""
+    return _BACKEND.rate_hit(key, int(maxn), float(per))
+
+
+def guard_check(key: str, max_fails: int, window: float, lockout: float) -> Tuple[bool, int]:
+    return _BACKEND.guard_check(key, int(max_fails), float(window), float(lockout))
+
+
+def guard_fail(key: str, max_fails: int, window: float, lockout: float) -> None:
+    _BACKEND.guard_fail(key, int(max_fails), float(window), float(lockout))
+
+
+def guard_reset(key: str) -> None:
+    _BACKEND.guard_reset(key)
+
+
+def kv_get(key: str) -> Optional[Json]:
+    return _BACKEND.kv_get(key)
+
+
+def kv_set(key: str, value: Json, ttl: float, only_if_absent: bool = False) -> bool:
+    return _BACKEND.kv_set(key, value, float(ttl), only_if_absent)
+
+
+def kv_take(key: str) -> Optional[Json]:
+    return _BACKEND.kv_take(key)
+
+
+def backup_now() -> str:
+    """Write ``data/backups/noor-<utc-time>-<id>.sqlite3.gz``; returns its path."""
+    return _BACKEND.backup_now(BACKUP_DIR, BACKUP_KEEP)
 
 
 @contextlib.contextmanager
