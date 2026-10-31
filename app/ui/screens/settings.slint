@@ -1,0 +1,116 @@
+import { Theme, Type, Icons } from "../theme.slint";
+import { Tile, TileStyle, Chip, ChipScroller, Caption, CardTitle, Metric, PageTitle, PillNav,
+         IconButton, IconButtonStyle, PillButton, ButtonStyle } from "../components/bento.slint";
+
+export component SettingsScreen inherits VerticalLayout {
+    in property <string> currency;
+    in property <int> cycle-day;
+    in property <string> version;
+    in property <bool> can-load-demo;
+    callback palette-changed(int);
+    callback dark-changed(bool);
+    callback cycle-day-changed(int);
+    callback currency-changed(string);
+    callback load-demo();
+
+    property <[string]> currencies: ["SAR", "AED", "KWD", "QAR", "BHD", "OMR", "EGP", "JOD", "MAD", "DZD", "TND", "IQD", "USD", "EUR", "GBP"];
+
+    spacing: Theme.gap;
+
+    PageTitle { first: "App"; second: "Settings"; }
+
+    Tile {
+        CardTitle { text: "Look"; }
+        VerticalLayout {
+            spacing: Theme.space-2;
+            Caption { text: "Accent"; }
+            ChipScroller {
+                for name[i] in ["Lime", "Solar", "Ember", "Lilac"]: Chip {
+                    text: name;
+                    swatch: Theme.accents[i];
+                    active: Theme.palette == i;
+                    on-tile: true;
+                    clicked => { root.palette-changed(i); }
+                }
+            }
+        }
+        VerticalLayout {
+            spacing: Theme.space-2;
+            Caption { text: "Mode"; }
+            PillNav {
+                items: ["Light", "Dark"];
+                on-tile: true;
+                current: Theme.dark ? 1 : 0;
+                changed(i) => { root.dark-changed(i == 1); }
+            }
+        }
+    }
+
+    Tile {
+        CardTitle { text: "Payday"; }
+        Text {
+            text: "Your budget cycle starts on this day of the month, so salary and spending land in the same cycle.";
+            wrap: word-wrap;
+            font-size: Type.label;
+            color: Theme.c.ink-muted;
+        }
+        HorizontalLayout {
+            spacing: Theme.space-3;
+            alignment: start;
+            IconButton {
+                icon: Icons.minus;
+                kind: IconButtonStyle.muted;
+                enabled: root.cycle-day > 1;
+                accessible-label: "Earlier day";
+                clicked => { root.cycle-day-changed(root.cycle-day - 1); }
+            }
+            VerticalLayout {
+                alignment: center;
+                min-width: 120px;
+                Metric { text: "Day " + root.cycle-day; horizontal-alignment: center; }
+            }
+            IconButton {
+                icon: Icons.plus;
+                kind: IconButtonStyle.muted;
+                enabled: root.cycle-day < 28;
+                accessible-label: "Later day";
+                clicked => { root.cycle-day-changed(root.cycle-day + 1); }
+            }
+        }
+    }
+
+    Tile {
+        CardTitle { text: "Currency"; }
+        ChipScroller {
+            for code in root.currencies: Chip {
+                text: code;
+                active: code == root.currency;
+                on-tile: true;
+                clicked => { root.currency-changed(code); }
+            }
+        }
+    }
+
+    Tile {
+        style: TileStyle.soft;
+        inner-spacing: Theme.space-2;
+        CardTitle { text: "Private by design"; }
+        Text {
+            text: "Everything stays in a database on this phone. No account, no ads, no tracking.";
+            wrap: word-wrap;
+            font-size: Type.label;
+            color: Theme.c.ink-muted;
+        }
+        if root.can-load-demo: HorizontalLayout {
+            alignment: start;
+            padding-top: Theme.space-2;
+            PillButton {
+                text: "Load sample data";
+                kind: ButtonStyle.ghost;
+                small: true;
+                clicked => { root.load-demo(); }
+            }
+        }
+        Caption { text: "Income Radar " + root.version; }
+    }
+}

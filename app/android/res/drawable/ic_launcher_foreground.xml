@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Radar mark: two rings and a sweep, lime on black. 108dp canvas, 72dp safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:strokeColor="#D4FF3A"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M54,54m-22,0a22,22 0,1 0,44 0a22,22 0,1 0,-44 0M54,54m-10,0a10,10 0,1 0,20 0a10,10 0,1 0,-20 0M54,54L70,38" />
+</vector>

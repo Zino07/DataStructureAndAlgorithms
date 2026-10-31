@@ -1,0 +1,82 @@
+import { Theme, Type, Icons } from "../theme.slint";
+import { Tile, TileStyle, PillNav, ListRow, Caption, Metric, PageTitle, IconButton, IconButtonStyle } from "../components/bento.slint";
+import { Dashboard, TxRow } from "../data.slint";
+
+export component ActivityScreen inherits VerticalLayout {
+    in property <Dashboard> dash;
+    in property <[TxRow]> rows;
+    in-out property <int> filter: 0; // 0 all, 1 expenses, 2 income
+    in-out property <int> selected: -1;
+    callback filter-changed(int);
+    callback delete(int);
+
+    spacing: Theme.gap;
+
+    PageTitle { first: "Your"; second: "Activity"; }
+
+    PillNav {
+        items: ["All", "Expenses", "Income"];
+        current <=> root.filter;
+        changed(i) => {
+            root.selected = -1;
+            root.filter-changed(i);
+        }
+    }
+
+    Tile {
+        style: TileStyle.inverse;
+        Caption { text: root.dash.cycle; on: TileStyle.inverse; }
+        HorizontalLayout {
+            spacing: Theme.space-4;
+            VerticalLayout {
+                horizontal-stretch: 1;
+                spacing: Theme.space-1;
+                Caption { text: "Income · " + root.dash.currency; on: TileStyle.inverse; }
+                Metric { text: root.dash.income; on: TileStyle.inverse; font-size: 28px; }
+            }
+            VerticalLayout {
+                horizontal-stretch: 1;
+                spacing: Theme.space-1;
+                Caption { text: "Spent · " + root.dash.currency; on: TileStyle.inverse; }
+                Metric { text: root.dash.expense; on: TileStyle.inverse; font-size: 28px; }
+            }
+        }
+    }
+
+    Tile {
+        inner-spacing: Theme.space-1;
+        pad: Theme.space-5;
+        if root.rows.length == 0: Text {
+            text: "Nothing here yet.";
+            font-size: Type.body;
+            color: Theme.c.ink-muted;
+        }
+        for row in root.rows: VerticalLayout {
+            if row.header: Caption {
+                text: row.title;
+                height: 32px;
+                vertical-alignment: bottom;
+            }
+            if !row.header: ListRow {
+                icon: row.icon;
+                title: row.title;
+                meta: row.meta;
+                value: root.selected == row.id ? "" : row.amount;
+                positive: row.income;
+                selected: root.selected == row.id;
+                clicked => { root.selected = root.selected == row.id ? -1 : row.id; }
+                if root.selected == row.id: IconButton {
+                    icon: Icons.trash;
+                    small: true;
+                    kind: IconButtonStyle.inverse;
+                    y: (parent.height - self.height) / 2;
+                    accessible-label: "Delete entry";
+                    clicked => {
+                        root.delete(row.id);
+                        root.selected = -1;
+                    }
+                }
+            }
+        }
+    }
+}

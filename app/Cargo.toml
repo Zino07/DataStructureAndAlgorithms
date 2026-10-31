@@ -1,0 +1,49 @@
+[package]
+name = "income-radar"
+description = "Income Radar — personal finance for Android"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[lib]
+# cdylib is what Android loads; rlib lets the desktop binary reuse the UI.
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "income-radar"
+path = "src/main.rs"
+
+[dependencies]
+income-radar-core = { path = "../crates/core" }
+chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
+
+[target.'cfg(not(target_os = "android"))'.dependencies]
+slint = { version = "1.18", default-features = false, features = ["std", "compat-1-2", "backend-winit", "renderer-femtovg"] }
+# Desktop-only: PNG output for the `--screenshots` mode.
+png = "0.17"
+
+[target.'cfg(target_os = "android")'.dependencies]
+slint = { version = "1.18", default-features = false, features = ["std", "compat-1-2", "backend-android-activity-06", "renderer-femtovg"] }
+
+[build-dependencies]
+slint-build = "1.18"
+
+[package.metadata.android]
+package = "app.incomeradar"
+apk_name = "income-radar"
+build_targets = ["aarch64-linux-android"]
+resources = "android/res"
+
+[package.metadata.android.sdk]
+min_sdk_version = 26
+target_sdk_version = 35
+
+[package.metadata.android.application]
+label = "Income Radar"
+icon = "@mipmap/ic_launcher"
+theme = "@android:style/Theme.Material.NoActionBar"
+
+[package.metadata.android.application.activity]
+config_changes = "orientation|screenSize|screenLayout|keyboardHidden|uiMode|density"
+orientation = "portrait"
+launch_mode = "singleTop"

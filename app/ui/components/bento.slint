@@ -1,0 +1,623 @@
+// Bento Neo components: tiles, notch card, pills, icon buttons, chips, badges,
+// progress, pill bars, list rows, segmented nav and the floating dock.
+
+import { Theme, Type, Icons } from "../theme.slint";
+
+export enum TileStyle { surface, inverse, accent, soft, muted }
+export enum ButtonStyle { inverse, accent, ghost }
+export enum IconButtonStyle { surface, inverse, accent, muted, outline }
+
+export struct Bar {
+    value: float,      // 0..1 of the tallest bar
+    label: string,
+    tip: string,       // value bubble text for the highlighted bar
+    highlight: bool,
+    empty: bool,
+}
+
+export component Icon inherits Path {
+    in property <string> data;
+    in property <length> size: 18px;
+    commands: data;
+    viewbox-width: 24;
+    viewbox-height: 24;
+    width: size;
+    height: size;
+    fill: transparent;
+    stroke: Theme.c.ink;
+    stroke-width: 1.8px;
+    stroke-line-cap: round;
+    stroke-line-join: round;
+}
+
+// Colours for content that sits on a given tile style.
+export global Ink {
+    public pure function fg(style: TileStyle) -> color {
+        if style == TileStyle.inverse { return Theme.c.ink-inverse; }
+        if style == TileStyle.accent { return Theme.c.on-accent; }
+        return Theme.c.ink;
+    }
+    public pure function muted(style: TileStyle) -> color {
+        if style == TileStyle.inverse { return Theme.c.ink-inverse.with-alpha(0.64); }
+        if style == TileStyle.accent { return Theme.c.on-accent.with-alpha(0.7); }
+        return Theme.c.ink-muted;
+    }
+    public pure function bg(style: TileStyle) -> color {
+        if style == TileStyle.inverse { return Theme.c.surface-inverse; }
+        if style == TileStyle.accent { return Theme.c.accent; }
+        if style == TileStyle.soft { return Theme.c.accent-soft; }
+        if style == TileStyle.muted { return Theme.c.surface-muted; }
+        return Theme.c.surface;
+    }
+}
+
+export component Caption inherits Text {
+    in property <TileStyle> on: TileStyle.surface;
+    font-size: Type.caption;
+    font-weight: 500;
+    color: Ink.muted(on);
+    letter-spacing: 0.1px;
+}
+
+export component Label inherits Text {
+    in property <TileStyle> on: TileStyle.surface;
+    font-size: Type.label;
+    font-weight: 500;
+    color: Ink.fg(on);
+}
+
+export component CardTitle inherits Text {
+    in property <TileStyle> on: TileStyle.surface;
+    font-size: Type.h3;
+    font-weight: 600;
+    letter-spacing: -0.17px;
+    color: Ink.fg(on);
+}
+
+export component Metric inherits Text {
+    in property <TileStyle> on: TileStyle.surface;
+    in property <bool> large: false;
+    // Shrink long numbers instead of truncating them.
+    font-size: large
+        ? (self.text.character-count > 10 ? 36px : self.text.character-count > 8 ? 42px : Type.metric-xl)
+        : (self.text.character-count > 9 ? 28px : Type.metric-md);
+    font-weight: 500;
+    letter-spacing: large ? -1.6px : -1px;
+    color: Ink.fg(on);
+    overflow: elide;
+}
+
+// Two-weight page title: first word muted/400, second ink/600.
+export component PageTitle inherits VerticalLayout {
+    in property <string> first;
+    in property <string> second;
+    spacing: -6px;
+    Text {
+        text: first;
+        font-size: Type.display;
+        font-weight: 400;
+        letter-spacing: -1.3px;
+        color: Theme.c.ink-muted;
+    }
+    Text {
+        text: second;
+        font-size: Type.display;
+        font-weight: 600;
+        letter-spacing: -1.3px;
+        color: Theme.c.ink;
+    }
+}
+
+// Base bento card. Children are stacked in a vertical layout.
+export component Tile inherits Rectangle {
+    in property <TileStyle> style: TileStyle.surface;
+    in property <length> pad: Theme.space-6;
+    in property <length> inner-spacing: Theme.space-4;
+    in property <bool> small: false;
+    border-radius: small ? Theme.radius-md : Theme.radius-lg;
+    background: Ink.bg(style);
+    clip: true;
+    animate background { duration: 200ms; }
+    VerticalLayout {
+        padding: small ? Theme.space-4 : root.pad;
+        spacing: root.inner-spacing;
+        @children
+    }
+}
+
+// Circle icon button.
+export component IconButton inherits Rectangle {
+    in property <string> icon;
+    in property <IconButtonStyle> kind: IconButtonStyle.surface;
+    in property <bool> small: false;
+    in property <bool> enabled: true;
+    in property <color> outline-color: Theme.c.ink;
+    callback clicked;
+
+    accessible-role: button;
+    width: small ? Theme.control-md : Theme.control-lg;
+    height: self.width;
+    border-radius: self.width / 2;
+    background: kind == IconButtonStyle.inverse ? Theme.c.surface-inverse
+        : kind == IconButtonStyle.accent ? Theme.c.accent
+        : kind == IconButtonStyle.muted ? Theme.c.surface-muted
+        : kind == IconButtonStyle.outline ? transparent
+        : Theme.c.surface;
+    border-width: kind == IconButtonStyle.outline ? 1px : 0px;
+    border-color: outline-color.with-alpha(0.5);
+    opacity: enabled ? 1 : 0.4;
+    transform-scale-x: ta.pressed ? 96% : 100%;
+    transform-scale-y: self.transform-scale-x;
+    animate transform-scale-x { duration: 100ms; easing: ease-out; }
+
+    Icon {
+        data: root.icon;
+        stroke: kind == IconButtonStyle.inverse ? Theme.c.ink-inverse
+            : kind == IconButtonStyle.accent ? Theme.c.on-accent
+            : kind == IconButtonStyle.outline ? root.outline-color
+            : Theme.c.ink;
+    }
+    ta := TouchArea {
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
+}
+
+// Pill button (48px, 40px when small).
+export component PillButton inherits Rectangle {
+    in property <string> text;
+    in property <string> icon;
+    in property <ButtonStyle> kind: ButtonStyle.inverse;
+    in property <bool> small: false;
+    in property <bool> enabled: true;
+    callback clicked;
+
+    property <color> fg: kind == ButtonStyle.accent ? Theme.c.on-accent
+        : kind == ButtonStyle.ghost ? Theme.c.ink
+        : Theme.c.ink-inverse;
+
+    accessible-role: button;
+    accessible-label: root.text;
+    height: small ? Theme.control-md : Theme.control-lg;
+    min-width: lay.preferred-width;
+    border-radius: self.height / 2;
+    background: kind == ButtonStyle.accent ? Theme.c.accent
+        : kind == ButtonStyle.ghost ? Theme.c.surface
+        : Theme.c.surface-inverse;
+    border-width: kind == ButtonStyle.ghost ? 1px : 0px;
+    border-color: Theme.c.line;
+    opacity: enabled ? 1 : 0.45;
+    transform-scale-x: ta.pressed ? 98% : 100%;
+    transform-scale-y: self.transform-scale-x;
+    animate transform-scale-x { duration: 100ms; easing: ease-out; }
+
+    lay := HorizontalLayout {
+        padding-left: small ? Theme.space-4 : Theme.space-6;
+        padding-right: self.padding-left;
+        spacing: Theme.space-2;
+        alignment: center;
+        if root.icon != "": Icon {
+            data: root.icon;
+            stroke: root.fg;
+            y: (parent.height - self.height) / 2;
+        }
+        Text {
+            text: root.text;
+            color: root.fg;
+            font-size: small ? 13px : 14px;
+            font-weight: 500;
+            vertical-alignment: center;
+        }
+    }
+    ta := TouchArea {
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
+}
+
+// Filter / choice pill.
+export component Chip inherits Rectangle {
+    in property <string> text;
+    in property <bool> active: false;
+    in property <bool> accent: false;
+    in property <bool> outline: false;
+    in property <color> swatch: transparent;
+    // set when the chip sits on a white tile so it stays visible
+    in property <bool> on-tile: false;
+    callback clicked;
+
+    property <color> fg: active ? Theme.c.ink-inverse : accent ? Theme.c.on-accent : Theme.c.ink;
+
+    accessible-role: button;
+    accessible-label: root.text;
+    height: Theme.control-md;
+    min-width: lay.preferred-width;
+    border-radius: self.height / 2;
+    background: active ? Theme.c.surface-inverse
+        : accent ? Theme.c.accent
+        : outline ? transparent
+        : on-tile ? Theme.c.surface-muted
+        : Theme.c.surface;
+    border-width: outline && !active ? 1px : 0px;
+    border-color: Theme.c.line;
+    animate background { duration: 200ms; }
+
+    lay := HorizontalLayout {
+        padding-left: Theme.space-4;
+        padding-right: Theme.space-4;
+        spacing: 6px;
+        alignment: center;
+        if root.swatch != transparent: Rectangle {
+            width: 12px;
+            height: 12px;
+            y: (parent.height - self.height) / 2;
+            border-radius: 6px;
+            background: root.swatch;
+            border-width: 1px;
+            border-color: Theme.c.ink.with-alpha(0.15);
+        }
+        Text {
+            text: root.text;
+            color: root.fg;
+            font-size: Type.label;
+            font-weight: 500;
+            vertical-alignment: center;
+        }
+    }
+    TouchArea { clicked => { root.clicked(); } }
+}
+
+// Delta badge with an arrow; colour is never the only signal.
+export component Badge inherits Rectangle {
+    in property <string> text;
+    in property <bool> up: true;
+    // colour follows meaning, not direction: spending up is bad
+    in property <bool> bad: !self.up;
+    in property <bool> neutral: false;
+    height: 22px;
+    min-width: lay.preferred-width;
+    border-radius: 11px;
+    background: Theme.c.accent-soft;
+    lay := HorizontalLayout {
+        padding-left: 7px;
+        padding-right: 8px;
+        spacing: 2px;
+        alignment: center;
+        if !root.neutral: Icon {
+            data: root.up ? Icons.arrow-up : Icons.arrow-down;
+            size: 12px;
+            stroke-width: 2px;
+            y: (parent.height - self.height) / 2;
+            stroke: root.bad ? Theme.c.negative : Theme.c.positive;
+        }
+        Text {
+            text: root.text;
+            font-size: 11px;
+            font-weight: 600;
+            vertical-alignment: center;
+            color: root.neutral ? Theme.c.ink : root.bad ? Theme.c.negative : Theme.c.positive;
+        }
+    }
+}
+
+export component Progress inherits Rectangle {
+    in property <float> value; // 0..1
+    in property <color> track: Theme.c.surface-muted;
+    in property <color> fill: Theme.c.accent;
+    height: 8px;
+    border-radius: 4px;
+    background: track;
+    Rectangle {
+        x: 0;
+        width: Math.max(root.value > 0 ? root.height : 0, parent.width * Math.clamp(root.value, 0, 1));
+        height: parent.height;
+        border-radius: parent.border-radius;
+        background: root.fill;
+        animate width { duration: 300ms; easing: ease-out; }
+    }
+}
+
+// Pill bar chart: base bars, one highlighted bar with a value bubble, empty bars muted.
+export component Bars inherits VerticalLayout {
+    in property <[Bar]> bars;
+    in property <length> chart-height: 120px;
+    in property <color> base: Theme.c.surface-inverse;
+    in property <color> empty: Theme.c.surface-muted;
+    in property <color> label-color: Theme.c.ink-muted;
+    spacing: Theme.space-2;
+
+    HorizontalLayout {
+        height: root.chart-height + 30px;
+        spacing: Theme.space-2;
+        for bar in root.bars: Rectangle {
+            Rectangle {
+                property <length> h: bar.empty ? 12px : Math.max(16px, root.chart-height * bar.value);
+                width: Math.min(parent.width, 36px);
+                height: h;
+                x: (parent.width - self.width) / 2;
+                y: parent.height - self.height;
+                border-radius: Math.min(self.width, self.height) / 2;
+                background: bar.highlight ? Theme.c.accent : bar.empty ? root.empty : root.base;
+                animate height { duration: 300ms; easing: ease-out; }
+            }
+            if bar.highlight && bar.tip != "": Rectangle {
+                property <length> bar-h: Math.max(16px, root.chart-height * bar.value);
+                y: parent.height - bar-h - self.height - 6px;
+                x: (parent.width - self.width) / 2;
+                height: 24px;
+                width: tip.preferred-width + 16px;
+                border-radius: 12px;
+                background: Theme.c.surface;
+                tip := Text {
+                    text: bar.tip;
+                    font-size: Type.caption;
+                    font-weight: 600;
+                    color: Theme.c.ink;
+                }
+            }
+        }
+    }
+    HorizontalLayout {
+        spacing: Theme.space-2;
+        for bar in root.bars: Text {
+            text: bar.label;
+            horizontal-alignment: center;
+            font-size: Type.caption;
+            font-weight: 500;
+            color: root.label-color;
+        }
+    }
+}
+
+// 40px icon circle, two-line text, right-aligned value.
+export component ListRow inherits Rectangle {
+    in property <string> icon;
+    in property <string> title;
+    in property <string> meta;
+    in property <string> value;
+    in property <bool> positive: false;
+    in property <bool> negative: false;
+    in property <bool> selected: false;
+    in property <TileStyle> on: TileStyle.surface;
+    callback clicked;
+
+    height: 60px;
+    border-radius: Theme.radius-md;
+    background: selected ? Theme.c.surface-muted : transparent;
+    animate background { duration: 200ms; }
+
+    HorizontalLayout {
+        padding-left: root.selected ? Theme.space-3 : 0px;
+        padding-right: root.selected ? Theme.space-3 : 0px;
+        spacing: Theme.space-3;
+        alignment: stretch;
+        Rectangle {
+            width: 40px;
+            height: 40px;
+            y: (parent.height - self.height) / 2;
+            border-radius: 20px;
+            background: root.on == TileStyle.surface ? Theme.c.surface-muted : Theme.c.surface;
+            Icon { data: root.icon; }
+        }
+        VerticalLayout {
+            alignment: center;
+            spacing: 2px;
+            horizontal-stretch: 1;
+            Text {
+                text: root.title;
+                font-size: Type.body;
+                font-weight: 600;
+                color: Ink.fg(root.on);
+                overflow: elide;
+            }
+            Text {
+                text: root.meta;
+                font-size: Type.caption + 1px;
+                font-weight: 500;
+                color: Ink.muted(root.on);
+                overflow: elide;
+            }
+        }
+        @children
+        if root.value != "": Text {
+            text: root.value;
+            font-size: Type.body;
+            font-weight: 600;
+            vertical-alignment: center;
+            horizontal-alignment: right;
+            color: root.positive ? Theme.c.positive : root.negative ? Theme.c.negative : Ink.fg(root.on);
+        }
+    }
+    TouchArea { clicked => { root.clicked(); } }
+}
+
+// Segmented pill nav. Active item is the black pill.
+export component PillNav inherits Rectangle {
+    in property <[string]> items;
+    in-out property <int> current: 0;
+    in property <bool> on-tile: false;
+    callback changed(int);
+    height: Theme.control-md + 12px;
+    border-radius: self.height / 2;
+    background: on-tile ? Theme.c.surface-muted : Theme.c.surface;
+    HorizontalLayout {
+        padding: 6px;
+        spacing: Theme.space-1;
+        for item[i] in root.items: Rectangle {
+            border-radius: self.height / 2;
+            background: i == root.current ? Theme.c.surface-inverse : transparent;
+            animate background { duration: 200ms; }
+            Text {
+                text: item;
+                font-size: Type.label;
+                font-weight: 500;
+                color: i == root.current ? Theme.c.ink-inverse : Theme.c.ink-muted;
+            }
+            TouchArea {
+                clicked => {
+                    root.current = i;
+                    root.changed(i);
+                }
+            }
+        }
+    }
+}
+
+export struct DockItem {
+    icon: string,
+    label: string,
+}
+
+// Floating black pill navigation, bottom centre.
+export component Dock inherits Rectangle {
+    in property <[DockItem]> items;
+    in property <int> current: 0;
+    callback selected(int);
+    height: Theme.control-lg + 16px;
+    width: lay.preferred-width;
+    border-radius: self.height / 2;
+    background: Theme.c.surface-inverse;
+    drop-shadow-blur: 48px;
+    drop-shadow-offset-y: 16px;
+    drop-shadow-color: Theme.dark ? #00000099 : #00000024;
+    lay := HorizontalLayout {
+        padding: 8px;
+        spacing: 6px;
+        for item[i] in root.items: Rectangle {
+            width: Theme.control-lg;
+            height: Theme.control-lg;
+            border-radius: self.width / 2;
+            background: i == root.current ? Theme.c.accent : transparent;
+            accessible-role: button;
+            accessible-label: item.label;
+            animate background { duration: 200ms; }
+            Icon {
+                data: item.icon;
+                stroke: i == root.current ? Theme.c.on-accent : Theme.c.ink-inverse;
+            }
+            TouchArea { clicked => { root.selected(i); } }
+        }
+    }
+}
+
+// Card with the signature notched top-right corner holding one round action.
+export component NotchCard inherits Rectangle {
+    in property <TileStyle> style: TileStyle.surface;
+    in property <string> icon: Icons.arrow-up-right;
+    in property <IconButtonStyle> button-kind: IconButtonStyle.inverse;
+    in property <color> notch-bg: Theme.c.canvas;
+    callback action;
+
+    property <length> bite: 56px;
+    property <length> fillet: 20px;
+    property <color> card: Ink.bg(style);
+
+    border-radius: Theme.radius-lg;
+    background: card;
+
+    VerticalLayout {
+        padding: Theme.space-6;
+        padding-right: root.bite + Theme.space-2;
+        spacing: Theme.space-3;
+        @children
+    }
+
+    // the bite
+    Rectangle {
+        x: parent.width - root.bite;
+        y: 0;
+        width: root.bite;
+        height: root.bite;
+        background: root.notch-bg;
+        border-bottom-left-radius: root.fillet;
+    }
+    // concave fillet left of the bite
+    Rectangle {
+        x: parent.width - root.bite - root.fillet;
+        y: 0;
+        width: root.fillet;
+        height: root.fillet;
+        background: root.notch-bg;
+        Rectangle {
+            x: -1px;
+            y: 0;
+            width: parent.width + 1px;
+            height: parent.height + 1px;
+            background: root.card;
+            border-top-right-radius: root.fillet + 1px;
+        }
+    }
+    // concave fillet below the bite
+    Rectangle {
+        x: parent.width - root.fillet;
+        y: root.bite;
+        width: root.fillet;
+        height: root.fillet;
+        background: root.notch-bg;
+        Rectangle {
+            x: -1px;
+            y: 0;
+            width: parent.width + 1px;
+            height: parent.height + 1px;
+            background: root.card;
+            border-top-right-radius: root.fillet + 1px;
+        }
+    }
+    IconButton {
+        x: parent.width - self.width;
+        y: 0;
+        icon: root.icon;
+        kind: root.button-kind;
+        clicked => { root.action(); }
+    }
+}
+
+// Rounded text input with a caption above.
+export component Field inherits VerticalLayout {
+    in property <string> label;
+    in property <string> placeholder;
+    in property <InputType> input-type: InputType.text;
+    in-out property <string> text;
+    spacing: Theme.space-2;
+    Caption { text: root.label; }
+    Rectangle {
+        height: Theme.control-lg;
+        border-radius: Theme.radius-md;
+        background: Theme.c.surface-muted;
+        border-width: input.has-focus ? 2px : 0px;
+        border-color: Theme.c.accent-ink;
+        HorizontalLayout {
+            padding-left: Theme.space-4;
+            padding-right: Theme.space-4;
+            input := TextInput {
+                text <=> root.text;
+                input-type: root.input-type;
+                vertical-alignment: center;
+                font-size: Type.body;
+                color: Theme.c.ink;
+                selection-background-color: Theme.c.accent;
+                selection-foreground-color: Theme.c.on-accent;
+                single-line: true;
+            }
+        }
+        if root.text == "": Text {
+            x: Theme.space-4;
+            text: root.placeholder;
+            font-size: Type.body;
+            color: Theme.c.ink-muted;
+            vertical-alignment: center;
+            height: parent.height;
+        }
+    }
+}
+
+// Horizontally scrolling row of chips.
+export component ChipScroller inherits Flickable {
+    height: Theme.control-md;
+    content-width: row.preferred-width;
+    content-height: self.height;
+    row := HorizontalLayout {
+        spacing: Theme.space-2;
+        @children
+    }
+}

@@ -1,0 +1,85 @@
+import { Theme, Type, Icons } from "../theme.slint";
+import { Tile, TileStyle, Chip, ChipScroller, Caption, CardTitle, Metric, PageTitle, PillButton, ButtonStyle,
+         Field, ListRow } from "../components/bento.slint";
+import { Dashboard, AccountItem } from "../data.slint";
+
+export component AccountsScreen inherits VerticalLayout {
+    in property <Dashboard> dash;
+    in property <[AccountItem]> accounts;
+    in-out property <string> error;
+    // returns "" on success, otherwise an error message
+    callback add-account(string /* name */, int /* kind */, string /* opening */) -> string;
+
+    property <string> name;
+    property <int> kind: 1;
+    property <string> opening;
+
+    spacing: Theme.gap;
+
+    PageTitle { first: "Your"; second: "Accounts"; }
+
+    Tile {
+        style: TileStyle.inverse;
+        inner-spacing: Theme.space-1;
+        Caption { text: "Total balance · " + root.dash.currency; on: TileStyle.inverse; }
+        Metric { text: root.dash.balance; large: true; on: TileStyle.inverse; }
+        Caption {
+            text: root.accounts.length + (root.accounts.length == 1 ? " account" : " accounts");
+            on: TileStyle.inverse;
+        }
+    }
+
+    Tile {
+        inner-spacing: Theme.space-1;
+        pad: Theme.space-5;
+        for acc in root.accounts: ListRow {
+            icon: acc.icon;
+            title: acc.name;
+            meta: acc.kind;
+            value: acc.balance;
+            negative: acc.negative;
+        }
+    }
+
+    Tile {
+        inner-spacing: Theme.space-4;
+        CardTitle { text: "Add an account"; }
+        Field {
+            label: "Name";
+            placeholder: "e.g. Al Rajhi, Wallet";
+            text <=> root.name;
+        }
+        VerticalLayout {
+            spacing: Theme.space-2;
+            Caption { text: "Type"; }
+            ChipScroller {
+                Chip { text: "Cash"; on-tile: true; active: root.kind == 0; clicked => { root.kind = 0; } }
+                Chip { text: "Bank"; on-tile: true; active: root.kind == 1; clicked => { root.kind = 1; } }
+                Chip { text: "Card"; on-tile: true; active: root.kind == 2; clicked => { root.kind = 2; } }
+                Chip { text: "Savings"; on-tile: true; active: root.kind == 3; clicked => { root.kind = 3; } }
+            }
+        }
+        Field {
+            label: "Opening balance · " + root.dash.currency;
+            placeholder: "0.00";
+            input-type: InputType.decimal;
+            text <=> root.opening;
+        }
+        if root.error != "": Text {
+            text: root.error;
+            font-size: Type.label;
+            color: Theme.c.negative;
+        }
+        PillButton {
+            text: "Add account";
+            icon: Icons.plus;
+            clicked => {
+                root.error = root.add-account(root.name, root.kind, root.opening);
+                if root.error == "" {
+                    root.name = "";
+                    root.opening = "";
+                }
+            }
+        }
+    }
+}

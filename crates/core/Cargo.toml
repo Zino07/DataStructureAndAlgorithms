@@ -1,0 +1,10 @@
+[package]
+name = "income-radar-core"
+description = "Domain model, storage and analytics for Income Radar"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+rusqlite = { version = "0.41", features = ["bundled"] }
+chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }

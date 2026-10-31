@@ -1,0 +1,199 @@
+import { Theme, Type, Icons } from "../theme.slint";
+import { Tile, TileStyle, PillNav, Chip, ChipScroller, Caption, CardTitle, Metric, IconButton, IconButtonStyle,
+         PillButton, ButtonStyle, Field, Icon } from "../components/bento.slint";
+import { CategoryItem, AccountItem } from "../data.slint";
+
+component Key inherits Rectangle {
+    in property <string> text;
+    in property <string> icon;
+    callback pressed;
+    accessible-role: button;
+    accessible-label: root.text;
+    height: 52px;
+    border-radius: self.height / 2;
+    background: ta.pressed ? Theme.c.surface-muted : Theme.c.surface;
+    animate background { duration: 100ms; }
+    if root.icon == "": Text {
+        text: root.text;
+        font-size: 22px;
+        font-weight: 500;
+        color: Theme.c.ink;
+    }
+    if root.icon != "": Icon { data: root.icon; size: 22px; }
+    ta := TouchArea { clicked => { root.pressed(); } }
+}
+
+export component AddScreen inherits VerticalLayout {
+    in property <string> currency;
+    in property <[CategoryItem]> expense-categories;
+    in property <[CategoryItem]> income-categories;
+    in property <[AccountItem]> accounts;
+    in-out property <string> error;
+    callback close();
+    // returns "" on success, otherwise an error message
+    callback save(bool /* income */, string /* amount */, int /* category */, int /* account */,
+                  int /* days ago */, string /* note */) -> string;
+
+    property <int> kind: 0; // 0 expense, 1 income
+    property <string> amount: "";
+    property <int> category: -1;
+    property <int> account: root.accounts.length > 0 ? root.accounts[0].id : -1;
+    property <int> days-ago: 0;
+    property <string> note;
+    property <[CategoryItem]> categories: kind == 0 ? expense-categories : income-categories;
+
+    public function reset() {
+        root.kind = 0;
+        root.amount = "";
+        root.category = -1;
+        root.days-ago = 0;
+        root.note = "";
+        root.error = "";
+        root.account = root.accounts.length > 0 ? root.accounts[0].id : -1;
+    }
+
+    // Keypad editing lives in Rust (validation of decimals and length).
+    pure callback edit-amount(string /* current */, string /* key */) -> string;
+
+    function press(key: string) {
+        root.error = "";
+        root.amount = root.edit-amount(root.amount, key);
+    }
+
+    spacing: Theme.gap;
+
+    HorizontalLayout {
+        spacing: Theme.space-3;
+        IconButton {
+            icon: Icons.back;
+            accessible-label: "Back";
+            clicked => { root.close(); }
+        }
+        Text {
+            text: "New entry";
+            font-size: Type.h2;
+            font-weight: 600;
+            color: Theme.c.ink;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+        }
+    }
+
+    PillNav {
+        items: ["Expense", "Income"];
+        current <=> root.kind;
+        changed => {
+            root.category = -1;
+            root.error = "";
+        }
+    }
+
+    Tile {
+        style: TileStyle.inverse;
+        inner-spacing: Theme.space-2;
+        Caption { text: (root.kind == 0 ? "Spent · " : "Received · ") + root.currency; on: TileStyle.inverse; }
+        Metric {
+            text: root.amount == "" ? "0" : root.amount;
+            large: true;
+            on: TileStyle.inverse;
+            color: root.amount == "" ? Theme.c.ink-inverse.with-alpha(0.4) : Theme.c.ink-inverse;
+        }
+        if root.error != "": HorizontalLayout {
+            spacing: Theme.space-1;
+            Icon { data: "M12 8v5M12 16h.01M12 3 2 20h20z"; stroke: Theme.c.negative; size: 14px; y: (parent.height - self.height) / 2; }
+            Text {
+                text: root.error;
+                font-size: Type.label;
+                color: Theme.dark ? Theme.c.negative : #ff8a8a;
+                horizontal-stretch: 1;
+                vertical-alignment: center;
+            }
+        }
+    }
+
+    VerticalLayout {
+        spacing: Theme.space-2;
+        Caption { text: "Category"; }
+        ChipScroller {
+            for cat in root.categories: Chip {
+                text: cat.name;
+                active: cat.id == root.category;
+                clicked => {
+                    root.category = cat.id;
+                    root.error = "";
+                }
+            }
+        }
+    }
+
+    VerticalLayout {
+        spacing: Theme.space-2;
+        Caption { text: "Account"; }
+        ChipScroller {
+            for acc in root.accounts: Chip {
+                text: acc.name;
+                active: acc.id == root.account;
+                clicked => { root.account = acc.id; }
+            }
+        }
+    }
+
+    VerticalLayout {
+        spacing: Theme.space-2;
+        Caption { text: "Date"; }
+        HorizontalLayout {
+            spacing: Theme.space-2;
+            alignment: start;
+            Chip { text: "Today"; active: root.days-ago == 0; clicked => { root.days-ago = 0; } }
+            Chip { text: "Yesterday"; active: root.days-ago == 1; clicked => { root.days-ago = 1; } }
+            Chip { text: "2 days ago"; active: root.days-ago == 2; clicked => { root.days-ago = 2; } }
+        }
+    }
+
+    Field {
+        label: "Note";
+        placeholder: "Optional";
+        text <=> root.note;
+    }
+
+    GridLayout {
+        spacing: Theme.space-2;
+        Row {
+            Key { text: "1"; pressed => { root.press("1"); } }
+            Key { text: "2"; pressed => { root.press("2"); } }
+            Key { text: "3"; pressed => { root.press("3"); } }
+        }
+        Row {
+            Key { text: "4"; pressed => { root.press("4"); } }
+            Key { text: "5"; pressed => { root.press("5"); } }
+            Key { text: "6"; pressed => { root.press("6"); } }
+        }
+        Row {
+            Key { text: "7"; pressed => { root.press("7"); } }
+            Key { text: "8"; pressed => { root.press("8"); } }
+            Key { text: "9"; pressed => { root.press("9"); } }
+        }
+        Row {
+            Key { text: "."; pressed => { root.press("."); } }
+            Key { text: "0"; pressed => { root.press("0"); } }
+            Key { icon: Icons.backspace; accessible-label: "Delete digit"; pressed => { root.press("<"); } }
+        }
+    }
+
+    PillButton {
+        text: "Save entry";
+        icon: Icons.check;
+        kind: ButtonStyle.accent;
+        clicked => {
+            if root.category < 0 {
+                root.error = "Choose a category";
+                return;
+            }
+            root.error = root.save(root.kind == 1, root.amount, root.category, root.account, root.days-ago, root.note);
+            if root.error == "" {
+                root.reset();
+                root.close();
+            }
+        }
+    }
+}

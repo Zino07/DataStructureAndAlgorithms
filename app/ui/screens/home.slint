@@ -1,0 +1,238 @@
+import { Theme, Type, Icons } from "../theme.slint";
+import { Tile, TileStyle, NotchCard, IconButton, IconButtonStyle, Chip, Badge, Progress, Bars,
+         ListRow, Caption, CardTitle, Metric, PageTitle, Icon, PillButton, ButtonStyle } from "../components/bento.slint";
+import { Dashboard, Bar, TxRow, CategoryShare } from "../data.slint";
+
+export component HomeScreen inherits VerticalLayout {
+    in property <Dashboard> dash;
+    in property <[Bar]> week;
+    in property <[TxRow]> recent;
+    in property <[CategoryShare]> top-categories;
+    callback add();
+    callback open-activity();
+    callback open-accounts();
+
+    spacing: Theme.gap;
+
+    // header
+    HorizontalLayout {
+        spacing: Theme.space-2;
+        Rectangle {
+            width: Theme.control-lg;
+            height: Theme.control-lg;
+            border-radius: self.width / 2;
+            background: Theme.c.surface-inverse;
+            Icon { data: Icons.radar; stroke: Theme.c.ink-inverse; }
+        }
+        Rectangle { horizontal-stretch: 1; }
+        Rectangle {
+            height: Theme.control-lg;
+            width: date-row.preferred-width;
+            border-radius: self.height / 2;
+            background: Theme.c.surface;
+            date-row := HorizontalLayout {
+                padding-left: Theme.space-4;
+                padding-right: Theme.space-5;
+                spacing: Theme.space-2;
+                alignment: center;
+                Icon { data: Icons.calendar; y: (parent.height - self.height) / 2; }
+                Text {
+                    text: root.dash.today;
+                    font-size: Type.label;
+                    font-weight: 500;
+                    color: Theme.c.ink;
+                    vertical-alignment: center;
+                }
+            }
+        }
+    }
+
+    VerticalLayout {
+        padding-top: Theme.space-2;
+        spacing: Theme.space-2;
+        PageTitle { first: "Income"; second: "Radar"; }
+        HorizontalLayout {
+            spacing: Theme.space-2;
+            alignment: start;
+            Chip { text: root.dash.cycle; active: true; }
+            Chip { text: root.dash.days-left; outline: true; }
+        }
+    }
+
+    // hero: total balance and the last seven days of spending
+    Tile {
+        style: TileStyle.inverse;
+        HorizontalLayout {
+            VerticalLayout {
+                spacing: Theme.space-1;
+                Caption { text: "Total balance · " + root.dash.currency; on: TileStyle.inverse; }
+                Metric { text: root.dash.balance; large: true; on: TileStyle.inverse; }
+            }
+            IconButton {
+                icon: Icons.arrow-up-right;
+                kind: IconButtonStyle.outline;
+                outline-color: Theme.c.ink-inverse;
+                clicked => { root.open-accounts(); }
+            }
+        }
+        Caption {
+            text: "Spent in the last 7 days · " + root.dash.week-total;
+            on: TileStyle.inverse;
+        }
+        Bars {
+            bars: root.week;
+            chart-height: 96px;
+            base: Theme.c.ink-inverse;
+            empty: Theme.c.ink-inverse.with-alpha(0.16);
+            label-color: Theme.c.ink-inverse.with-alpha(0.64);
+        }
+    }
+
+    NotchCard {
+        style: TileStyle.accent;
+        icon: Icons.plus;
+        action => { root.add(); }
+        Caption { text: "Safe to spend"; on: TileStyle.accent; }
+        Metric { text: root.dash.safe-per-day; on: TileStyle.accent; }
+        Caption { text: root.dash.currency + " per day · " + root.dash.days-left; on: TileStyle.accent; }
+    }
+
+    HorizontalLayout {
+        spacing: Theme.gap;
+        Tile {
+            horizontal-stretch: 1;
+            pad: Theme.space-5;
+            inner-spacing: Theme.space-3;
+            HorizontalLayout {
+                CardTitle { text: "Income"; vertical-alignment: center; }
+                Rectangle { horizontal-stretch: 1; }
+                if root.dash.income-delta != "": Badge {
+                    text: root.dash.income-delta;
+                    up: root.dash.income-up;
+                    y: (parent.height - self.height) / 2;
+                }
+            }
+            Rectangle { vertical-stretch: 1; }
+            Metric { text: root.dash.income; font-size: 24px; letter-spacing: -0.6px; }
+            Caption { text: "this cycle"; }
+        }
+        Tile {
+            horizontal-stretch: 1;
+            pad: Theme.space-5;
+            inner-spacing: Theme.space-3;
+            HorizontalLayout {
+                CardTitle { text: "Spent"; vertical-alignment: center; }
+                Rectangle { horizontal-stretch: 1; }
+                if root.dash.expense-delta != "": Badge {
+                    text: root.dash.expense-delta;
+                    // spending going up is the bad direction: show it in red with an up arrow
+                    up: root.dash.expense-up;
+                    bad: root.dash.expense-up;
+                    y: (parent.height - self.height) / 2;
+                }
+            }
+            Rectangle { vertical-stretch: 1; }
+            Metric { text: root.dash.expense; font-size: 24px; letter-spacing: -0.6px; }
+            Progress { value: root.dash.spent-ratio; fill: Theme.c.surface-inverse; }
+        }
+    }
+
+    HorizontalLayout {
+        spacing: Theme.gap;
+        Tile {
+            horizontal-stretch: 1;
+            style: TileStyle.soft;
+            pad: Theme.space-5;
+            inner-spacing: Theme.space-3;
+            CardTitle { text: "Saved"; }
+            Rectangle { vertical-stretch: 1; }
+            Metric { text: root.dash.savings-rate; }
+            Progress { value: root.dash.savings-ratio; track: Theme.c.surface; fill: Theme.c.surface-inverse; }
+            Caption { text: "of this cycle's income"; }
+        }
+        Tile {
+            horizontal-stretch: 1;
+            pad: Theme.space-5;
+            inner-spacing: Theme.space-3;
+            CardTitle { text: "On pace"; }
+            Rectangle { vertical-stretch: 1; }
+            Metric { text: root.dash.projected; font-size: 24px; letter-spacing: -0.6px; }
+            Caption { text: "spent by cycle end"; }
+        }
+    }
+
+    if root.top-categories.length > 0: Tile {
+        HorizontalLayout {
+            CardTitle { text: "Where it goes"; vertical-alignment: center; }
+        }
+        for cat in root.top-categories: VerticalLayout {
+            spacing: Theme.space-2;
+            HorizontalLayout {
+                spacing: Theme.space-2;
+                Icon { data: cat.icon; y: (parent.height - self.height) / 2; }
+                Text {
+                    text: cat.name;
+                    font-size: Type.label;
+                    font-weight: 500;
+                    color: Theme.c.ink;
+                    horizontal-stretch: 1;
+                    vertical-alignment: center;
+                }
+                Text {
+                    text: cat.percent;
+                    font-size: Type.label;
+                    font-weight: 500;
+                    color: Theme.c.ink-muted;
+                    vertical-alignment: center;
+                }
+                Text {
+                    text: cat.amount;
+                    font-size: Type.label;
+                    font-weight: 600;
+                    color: Theme.c.ink;
+                    vertical-alignment: center;
+                    min-width: 84px;
+                    horizontal-alignment: right;
+                }
+            }
+            Progress { value: cat.share; fill: Theme.c.surface-inverse; }
+        }
+    }
+
+    Tile {
+        inner-spacing: Theme.space-2;
+        HorizontalLayout {
+            CardTitle { text: "Recent"; vertical-alignment: center; }
+            Rectangle { horizontal-stretch: 1; }
+            IconButton {
+                icon: Icons.arrow-up-right;
+                kind: IconButtonStyle.muted;
+                small: true;
+                clicked => { root.open-activity(); }
+            }
+        }
+        if root.recent.length == 0: VerticalLayout {
+            padding-top: Theme.space-2;
+            padding-bottom: Theme.space-2;
+            spacing: Theme.space-4;
+            Text {
+                text: "No entries yet. Add your first income or expense to start the radar.";
+                wrap: word-wrap;
+                font-size: Type.body;
+                color: Theme.c.ink-muted;
+            }
+            HorizontalLayout {
+                alignment: start;
+                PillButton { text: "Add entry"; icon: Icons.plus; clicked => { root.add(); } }
+            }
+        }
+        for tx in root.recent: ListRow {
+            icon: tx.icon;
+            title: tx.title;
+            meta: tx.meta;
+            value: tx.amount;
+            positive: tx.income;
+            clicked => { root.open-activity(); }
+        }
+    }
+}

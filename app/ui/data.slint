@@ -1,0 +1,58 @@
+// Data passed from Rust to the UI. All money arrives pre-formatted.
+
+import { Bar } from "components/bento.slint";
+export { Bar }
+
+export struct Dashboard {
+    today: string,            // "Sat, 31 Oct"
+    cycle: string,            // "October 2026"
+    days-left: string,        // "1 day left"
+    currency: string,
+    balance: string,
+    safe-per-day: string,
+    income: string,
+    income-delta: string,     // "12%" or ""
+    income-up: bool,
+    expense: string,
+    expense-delta: string,
+    expense-up: bool,         // true when spending went up (shown in red)
+    spent-ratio: float,
+    projected: string,        // "On pace for 4,210.00"
+    savings-rate: string,     // "42%" or "—"
+    savings-ratio: float,
+    week-total: string,
+    has-data: bool,
+}
+
+export struct TxRow {
+    id: int,
+    header: bool,             // date separator row
+    title: string,
+    meta: string,
+    amount: string,
+    income: bool,
+    icon: string,
+}
+
+export struct CategoryItem {
+    id: int,
+    name: string,
+    icon: string,
+}
+
+export struct CategoryShare {
+    name: string,
+    icon: string,
+    amount: string,
+    share: float,             // 0..1 of the largest
+    percent: string,
+}
+
+export struct AccountItem {
+    id: int,
+    name: string,
+    kind: string,
+    icon: string,
+    balance: string,
+    negative: bool,
+}

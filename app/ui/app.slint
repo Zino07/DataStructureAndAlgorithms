@@ -1,0 +1,168 @@
+import "../fonts/Manrope-Regular.ttf";
+import "../fonts/Manrope-Medium.ttf";
+import "../fonts/Manrope-SemiBold.ttf";
+import "../fonts/Manrope-Bold.ttf";
+
+import { Theme, Icons } from "theme.slint";
+import { Dock, DockItem } from "components/bento.slint";
+import { Dashboard, Bar, TxRow, CategoryItem, CategoryShare, AccountItem } from "data.slint";
+import { HomeScreen } from "screens/home.slint";
+import { ActivityScreen } from "screens/activity.slint";
+import { AddScreen } from "screens/add.slint";
+import { AccountsScreen } from "screens/accounts.slint";
+import { SettingsScreen } from "screens/settings.slint";
+
+export { Theme, Dashboard, Bar, TxRow, CategoryItem, CategoryShare, AccountItem }
+
+export enum Screen { home, activity, accounts, settings }
+
+export component AppWindow inherits Window {
+    title: "Income Radar";
+    preferred-width: 390px;
+    preferred-height: 844px;
+    default-font-family: "Manrope";
+    background: Theme.c.canvas;
+
+    in property <Dashboard> dash;
+    in property <[Bar]> week;
+    in property <[TxRow]> recent;
+    in property <[TxRow]> activity;
+    in property <[CategoryShare]> top-categories;
+    in property <[CategoryItem]> expense-categories;
+    in property <[CategoryItem]> income-categories;
+    in property <[AccountItem]> accounts;
+    in property <int> cycle-day: 1;
+    in property <string> version;
+    in property <bool> can-load-demo;
+    in-out property <Screen> screen: Screen.home;
+    in-out property <bool> adding: false;
+    in-out property <int> activity-filter: 0;
+
+    callback save-entry(bool, string, int, int, int, string) -> string;
+    pure callback edit-amount(string, string) -> string;
+    callback delete-entry(int);
+    callback activity-filter-changed(int);
+    callback add-account(string, int, string) -> string;
+    callback palette-changed(int);
+    callback dark-changed(bool);
+    callback cycle-day-changed(int);
+    callback currency-changed(string);
+    callback load-demo();
+
+    property <length> top-inset: Math.max(root.safe-area-insets.top, 12px);
+    property <length> bottom-inset: root.safe-area-insets.bottom;
+    property <length> keyboard: root.virtual-keyboard-size.height;
+
+    public function open-add() {
+        add-screen.reset();
+        root.adding = true;
+        add-scroll.content-y = 0;
+    }
+
+    public function scroll-to(y: float) {
+        main-scroll.content-y = -y * 1px;
+    }
+
+    function go(s: Screen) {
+        root.screen = s;
+        main-scroll.content-y = 0;
+    }
+
+    main-scroll := Flickable {
+        visible: !root.adding;
+        content-height: main-content.preferred-height;
+        main-content := VerticalLayout {
+            width: main-scroll.width;
+            padding-left: 16px;
+            padding-right: 16px;
+            padding-top: root.top-inset + 8px;
+            // room for the floating dock
+            padding-bottom: root.bottom-inset + 112px;
+
+            if root.screen == Screen.home: HomeScreen {
+                dash: root.dash;
+                week: root.week;
+                recent: root.recent;
+                top-categories: root.top-categories;
+                add => { root.open-add(); }
+                open-activity => { root.go(Screen.activity); }
+                open-accounts => { root.go(Screen.accounts); }
+            }
+            if root.screen == Screen.activity: ActivityScreen {
+                dash: root.dash;
+                rows: root.activity;
+                filter: root.activity-filter;
+                filter-changed(i) => {
+                    root.activity-filter = i;
+                    root.activity-filter-changed(i);
+                }
+                delete(id) => { root.delete-entry(id); }
+            }
+            if root.screen == Screen.accounts: AccountsScreen {
+                dash: root.dash;
+                accounts: root.accounts;
+                add-account(name, kind, opening) => { return root.add-account(name, kind, opening); }
+            }
+            if root.screen == Screen.settings: SettingsScreen {
+                currency: root.dash.currency;
+                cycle-day: root.cycle-day;
+                version: root.version;
+                can-load-demo: root.can-load-demo;
+                palette-changed(i) => { root.palette-changed(i); }
+                dark-changed(d) => { root.dark-changed(d); }
+                cycle-day-changed(d) => { root.cycle-day-changed(d); }
+                currency-changed(c) => { root.currency-changed(c); }
+                load-demo => {
+                    root.load-demo();
+                    root.go(Screen.home);
+                }
+            }
+        }
+    }
+
+    add-scroll := Flickable {
+        visible: root.adding;
+        content-height: add-content.preferred-height;
+        add-content := VerticalLayout {
+            width: add-scroll.width;
+            padding-left: 16px;
+            padding-right: 16px;
+            padding-top: root.top-inset + 8px;
+            padding-bottom: Math.max(root.bottom-inset, root.keyboard) + 16px;
+            add-screen := AddScreen {
+                currency: root.dash.currency;
+                expense-categories: root.expense-categories;
+                income-categories: root.income-categories;
+                accounts: root.accounts;
+                close => { root.adding = false; }
+                save(income, amount, category, account, days, note) => {
+                    return root.save-entry(income, amount, category, account, days, note);
+                }
+                edit-amount(current, key) => { return root.edit-amount(current, key); }
+            }
+        }
+    }
+
+    if !root.adding: Dock {
+        x: (parent.width - self.width) / 2;
+        y: parent.height - self.height - root.bottom-inset - 20px;
+        items: [
+            { icon: Icons.grid, label: "Home" },
+            { icon: Icons.activity, label: "Activity" },
+            { icon: Icons.plus, label: "Add entry" },
+            { icon: Icons.wallet, label: "Accounts" },
+            { icon: Icons.sliders, label: "Settings" },
+        ];
+        current: root.screen == Screen.home ? 0
+            : root.screen == Screen.activity ? 1
+            : root.screen == Screen.accounts ? 3
+            : 4;
+        selected(i) => {
+            if i == 0 { root.go(Screen.home); }
+            if i == 1 { root.go(Screen.activity); }
+            if i == 2 { root.open-add(); }
+            if i == 3 { root.go(Screen.accounts); }
+            if i == 4 { root.go(Screen.settings); }
+        }
+    }
+}
