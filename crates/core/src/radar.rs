@@ -54,6 +54,7 @@ pub fn typical_day(days: &[Money]) -> Money {
 
 impl Radar {
     pub fn compute(store: &Store, today: NaiveDate) -> Result<Radar> {
+        store.set_today(today);
         let settings = store.settings()?;
         let period = Period::cycle_containing(today, settings.cycle_start_day);
         let (income, expense) = store.totals(period)?;

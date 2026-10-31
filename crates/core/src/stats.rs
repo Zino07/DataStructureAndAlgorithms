@@ -99,7 +99,7 @@ pub struct Stats {
 
     pub income_per_hour: Money,
     pub income_per_minute: Money,
-    /// Income divided by working hours (8 h on every non-weekend day).
+    /// Working income divided by working hours (your hours per day on every non-weekend day).
     pub income_per_work_hour: Option<Money>,
     pub burn_per_day: Money,
     pub burn_per_hour: Money,
@@ -209,6 +209,7 @@ impl Stats {
         now_minute: u16,
         range: Range,
     ) -> Result<Stats> {
+        store.set_today(today);
         let settings = store.settings()?;
         let period = range.period(today, settings.cycle_start_day);
         let order = week_order(settings.weekend);
@@ -281,9 +282,11 @@ impl Stats {
             .take(elapsed_days as usize)
             .filter(|d| !settings.weekend.contains(d.weekday()))
             .count() as u32;
-        let work_hours = work_days * 8;
+        let work_hours = work_days * settings.work_hours;
+        // only pay for working time counts (salary, freelance), not gifts or investments
+        let work_income = store.work_income(period)?;
         let income_per_work_hour =
-            (work_hours > 0 && income.0 > 0).then(|| Money(income.0 / work_hours as i64));
+            (work_hours > 0 && work_income.0 > 0).then(|| Money(work_income.0 / work_hours as i64));
         let burn_per_day = per(expense, elapsed_minutes, 1440);
 
         // distribution

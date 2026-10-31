@@ -33,6 +33,7 @@ export component ActivityScreen inherits VerticalLayout {
     callback query-changed(string);
     callback edit(int);
     callback delete-transfer(int);
+    callback edit-transfer(int);
 
     spacing: Theme.gap;
 
@@ -119,7 +120,7 @@ export component ActivityScreen inherits VerticalLayout {
                 title: row.title;
                 meta: row.meta;
                 value: row.transfer && root.selected == row.id ? "" : row.amount;
-                value-meta: row.time;
+                value-meta: row.upcoming ? "Planned · " + row.time : row.time;
                 positive: row.income;
                 selected: row.transfer && root.selected == row.id;
                 clicked => {
@@ -127,6 +128,17 @@ export component ActivityScreen inherits VerticalLayout {
                         root.selected = root.selected == row.id ? -1 : row.id;
                     } else {
                         root.edit(row.id);
+                    }
+                }
+                if row.transfer && root.selected == row.id: IconButton {
+                    icon: Icons.edit;
+                    small: true;
+                    kind: IconButtonStyle.muted;
+                    label: "Edit transfer";
+                    y: (parent.height - self.height) / 2;
+                    clicked => {
+                        root.edit-transfer(row.id);
+                        root.selected = -1;
                     }
                 }
                 if row.transfer && root.selected == row.id: IconButton {

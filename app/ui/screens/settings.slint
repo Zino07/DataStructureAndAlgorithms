@@ -1,50 +1,6 @@
 import { Theme, Type, Icons, Motion, Glass } from "../theme.slint";
-import { Tile, TileStyle, Chip, ChipScroller, Caption, CardTitle, Amount, PageTitle, PillNav,
-         IconButton, IconButtonStyle, PillButton, ButtonStyle, CardHeader, Ink, Swatch } from "../components/bento.slint";
-
-// On/off row with a sliding knob.
-component Switch inherits Rectangle {
-    in property <string> text;
-    in property <string> note;
-    in property <bool> on;
-    callback toggled(bool);
-    accessible-role: switch;
-    accessible-label: root.text;
-    accessible-checkable: true;
-    accessible-checked: root.on;
-    accessible-action-default => { root.toggled(!root.on); }
-    height: lay.preferred-height;
-    lay := HorizontalLayout {
-        spacing: Theme.space-3;
-        VerticalLayout {
-            horizontal-stretch: 1;
-            alignment: center;
-            spacing: 2px;
-            Text { text: root.text; font-size: Type.label + 1px; font-weight: 600; color: Theme.c.ink; }
-            if root.note != "": Caption { text: root.note; wrap: word-wrap; }
-        }
-        Rectangle {
-            width: 52px;
-            height: 32px;
-            y: (parent.height - self.height) / 2;
-            border-radius: 16px;
-            background: root.on ? Theme.c.accent : Ink.raised(TileStyle.surface);
-            border-width: root.on ? 0px : 1px;
-            border-color: Theme.c.line;
-            animate background { duration: Motion.quick; }
-            Rectangle {
-                x: root.on ? parent.width - self.width - 4px : 4px;
-                y: 4px;
-                width: 24px;
-                height: 24px;
-                border-radius: 12px;
-                background: root.on ? Theme.c.on-accent : Theme.c.ink-muted;
-                animate x { duration: Motion.snappy; easing: spring(0.2); }
-            }
-        }
-    }
-    TouchArea { clicked => { root.toggled(!root.on); } }
-}
+import { Tile, TileStyle, Chip, ChipScroller, Caption, CardTitle, Amount, PageTitle, PillNav, Switch,
+         IconButton, IconButtonStyle, PillButton, ButtonStyle, CardHeader, Ink, Swatch, Field, ListRow } from "../components/bento.slint";
 
 export component SettingsScreen inherits VerticalLayout {
     in property <string> currency;
@@ -53,6 +9,28 @@ export component SettingsScreen inherits VerticalLayout {
     in property <string> version;
     in property <string> data-note;     // "312 entries since 1 Sep 2026"
     in property <bool> can-load-demo;
+    in property <int> work-hours;
+    in property <bool> has-pin;
+    in property <bool> has-demo;
+    in property <int> repeat-count;
+    in property <string> data-message;
+    callback work-hours-changed(int);
+    callback open-categories();
+    callback open-repeats();
+    callback set-pin(string /* current */, string /* new */, string /* again */) -> string;
+    callback remove-pin(string) -> string;
+    callback backup-now();
+    callback restore-backup();
+    callback export-csv();
+    callback remove-demo();
+    callback erase-all();
+    in-out property <string> pin-error;
+    property <string> pin-current;
+    property <string> pin-new;
+    property <string> pin-again;
+    property <bool> pin-open: false;
+    property <bool> confirm-erase: false;
+    property <bool> confirm-restore: false;
     callback close();
     callback palette-changed(int);
     callback dark-changed(bool);
@@ -144,7 +122,7 @@ export component SettingsScreen inherits VerticalLayout {
         order: 2;
         CardHeader { title: "Payday"; }
         Text {
-            text: "Your budget cycle starts on this day of the month, so salary and spending land in the same cycle.";
+            text: "Your budget cycle starts on this day of the month, so salary and spending land in the same cycle. Days 29 to 31 use the last day of shorter months.";
             wrap: word-wrap;
             font-size: Type.label;
             color: Ink.muted(TileStyle.surface);
@@ -163,7 +141,7 @@ export component SettingsScreen inherits VerticalLayout {
                 alignment: center;
                 min-width: 120px;
                 Text {
-                    text: "Day " + root.cycle-day;
+                    text: root.cycle-day >= 29 ? "Day " + root.cycle-day + (root.cycle-day == 31 ? " · last" : "") : "Day " + root.cycle-day;
                     font-size: Type.metric-md;
                     font-weight: 500;
                     letter-spacing: -1px;
@@ -174,7 +152,7 @@ export component SettingsScreen inherits VerticalLayout {
             IconButton {
                 icon: Icons.plus;
                 kind: IconButtonStyle.muted;
-                enabled: root.cycle-day < 28;
+                enabled: root.cycle-day < 31;
                 label: "Later payday";
                 clicked => { root.cycle-day-changed(root.cycle-day + 1); }
             }
@@ -194,6 +172,47 @@ export component SettingsScreen inherits VerticalLayout {
     }
 
     Tile {
+        order: 3;
+        CardHeader { title: "Working hours"; }
+        Text {
+            text: "Paid hours in a working day. Used for “earned per hour” and what a purchase costs in work time. Only income marked “paid work” counts (Salary and Freelance by default; change it in Categories).";
+            wrap: word-wrap;
+            font-size: Type.label;
+            color: Ink.muted(TileStyle.surface);
+        }
+        HorizontalLayout {
+            spacing: Theme.space-3;
+            alignment: start;
+            IconButton {
+                icon: Icons.minus;
+                kind: IconButtonStyle.muted;
+                enabled: root.work-hours > 1;
+                label: "Fewer hours";
+                clicked => { root.work-hours-changed(root.work-hours - 1); }
+            }
+            VerticalLayout {
+                alignment: center;
+                min-width: 120px;
+                Text {
+                    text: root.work-hours + " h a day";
+                    font-size: Type.metric-md;
+                    font-weight: 500;
+                    letter-spacing: -1px;
+                    color: Theme.c.ink;
+                    horizontal-alignment: center;
+                }
+            }
+            IconButton {
+                icon: Icons.plus;
+                kind: IconButtonStyle.muted;
+                enabled: root.work-hours < 16;
+                label: "More hours";
+                clicked => { root.work-hours-changed(root.work-hours + 1); }
+            }
+        }
+    }
+
+    Tile {
         order: 4;
         CardHeader { title: "Currency"; }
         ChipScroller {
@@ -204,13 +223,222 @@ export component SettingsScreen inherits VerticalLayout {
                 clicked => { root.currency-changed(code); }
             }
         }
-        Caption { text: "Changes the label only. Amounts are not converted."; }
+        Caption {
+            text: "Decimals follow the currency (KWD, BHD, OMR, JOD, TND, IQD: 3 · JPY: 0 · others: 2). Amounts are not converted to another currency; switching only changes the label and the decimals.";
+            wrap: word-wrap;
+        }
+    }
+
+    Tile {
+        order: 5;
+        inner-spacing: Theme.space-1;
+        pad: Theme.space-5;
+        CardHeader { title: "Manage"; }
+        ListRow {
+            icon: Icons.sliders;
+            title: "Categories";
+            meta: "Add, rename, reorder, hide or delete";
+            clicked => { root.open-categories(); }
+        }
+        ListRow {
+            icon: Icons.calendar;
+            title: "Repeating entries";
+            meta: root.repeat-count == 0 ? "Salary, rent, subscriptions" : root.repeat-count + (root.repeat-count == 1 ? " repeating entry" : " repeating entries");
+            clicked => { root.open-repeats(); }
+        }
+    }
+
+    Tile {
+        order: 6;
+        CardHeader { title: "App lock"; }
+        Text {
+            text: root.has-pin ? "A PIN is asked every time the app opens." : "Ask for a PIN when the app opens, so balances stay private.";
+            wrap: word-wrap;
+            font-size: Type.label;
+            color: Ink.muted(TileStyle.surface);
+        }
+        if !root.pin-open: HorizontalLayout {
+            spacing: Theme.space-2;
+            alignment: start;
+            PillButton {
+                text: root.has-pin ? "Change or remove PIN" : "Set a PIN";
+                kind: ButtonStyle.ghost;
+                small: true;
+                on: TileStyle.surface;
+                clicked => { root.pin-open = true; root.pin-error = ""; }
+            }
+        }
+        if root.pin-open: VerticalLayout {
+            spacing: Theme.space-3;
+            if root.has-pin: Field {
+                label: "Current PIN";
+                input-type: InputType.password;
+                text <=> root.pin-current;
+            }
+            Field {
+                label: "New PIN (4 to 8 digits)";
+                input-type: InputType.password;
+                text <=> root.pin-new;
+            }
+            Field {
+                label: "New PIN again";
+                input-type: InputType.password;
+                text <=> root.pin-again;
+            }
+            if root.pin-error != "": Text {
+                text: root.pin-error;
+                font-size: Type.label;
+                font-weight: 600;
+                color: Theme.c.negative;
+                wrap: word-wrap;
+            }
+            HorizontalLayout {
+                spacing: Theme.space-2;
+                PillButton {
+                    text: "Cancel";
+                    kind: ButtonStyle.ghost;
+                    on: TileStyle.surface;
+                    clicked => { root.pin-open = false; root.pin-current = ""; root.pin-new = ""; root.pin-again = ""; root.pin-error = ""; }
+                }
+                if root.has-pin: PillButton {
+                    text: "Remove";
+                    kind: ButtonStyle.danger;
+                    clicked => {
+                        root.pin-error = root.remove-pin(root.pin-current);
+                        if root.pin-error == "" { root.pin-open = false; root.pin-current = ""; root.pin-new = ""; root.pin-again = ""; }
+                    }
+                }
+                PillButton {
+                    horizontal-stretch: 1;
+                    text: "Save PIN";
+                    icon: Icons.check;
+                    kind: Theme.glass ? ButtonStyle.accent : ButtonStyle.inverse;
+                    clicked => {
+                        root.pin-error = root.set-pin(root.pin-current, root.pin-new, root.pin-again);
+                        if root.pin-error == "" { root.pin-open = false; root.pin-current = ""; root.pin-new = ""; root.pin-again = ""; }
+                    }
+                }
+            }
+        }
+        Caption {
+            text: "The PIN keeps casual eyes out. The data file on the phone is not encrypted.";
+            wrap: word-wrap;
+        }
+    }
+
+    Tile {
+        order: 7;
+        CardHeader { title: "Your data"; }
+        Text {
+            text: "Everything is yours: save a copy, take it to a spreadsheet, or wipe it.";
+            wrap: word-wrap;
+            font-size: Type.label;
+            color: Ink.muted(TileStyle.surface);
+        }
+        HorizontalLayout {
+            spacing: Theme.space-2;
+            PillButton {
+                horizontal-stretch: 1;
+                text: "Back up";
+                kind: ButtonStyle.ghost;
+                small: true;
+                on: TileStyle.surface;
+                clicked => { root.confirm-restore = false; root.confirm-erase = false; root.backup-now(); }
+            }
+            PillButton {
+                horizontal-stretch: 1;
+                text: "Export CSV";
+                kind: ButtonStyle.ghost;
+                small: true;
+                on: TileStyle.surface;
+                clicked => { root.confirm-restore = false; root.confirm-erase = false; root.export-csv(); }
+            }
+        }
+        if !root.confirm-restore: HorizontalLayout {
+            alignment: start;
+            PillButton {
+                text: "Restore latest backup";
+                kind: ButtonStyle.ghost;
+                small: true;
+                on: TileStyle.surface;
+                clicked => { root.confirm-restore = true; root.confirm-erase = false; }
+            }
+        }
+        if root.confirm-restore: VerticalLayout {
+            spacing: Theme.space-2;
+            Text {
+                text: "This replaces everything now on the phone with the last backup.";
+                font-size: Type.label;
+                font-weight: 600;
+                color: Theme.c.ink;
+                wrap: word-wrap;
+            }
+            HorizontalLayout {
+                spacing: Theme.space-2;
+                PillButton { text: "Cancel"; kind: ButtonStyle.ghost; on: TileStyle.surface; clicked => { root.confirm-restore = false; } }
+                PillButton {
+                    horizontal-stretch: 1;
+                    text: "Replace with backup";
+                    kind: ButtonStyle.danger;
+                    clicked => { root.confirm-restore = false; root.restore-backup(); }
+                }
+            }
+        }
+        if root.data-message != "": Text {
+            text: root.data-message;
+            font-size: Type.label;
+            font-weight: 600;
+            color: Theme.c.ink;
+            wrap: word-wrap;
+        }
+        if root.has-demo: HorizontalLayout {
+            alignment: start;
+            PillButton {
+                text: "Remove sample data";
+                kind: ButtonStyle.ghost;
+                small: true;
+                on: TileStyle.surface;
+                clicked => { root.remove-demo(); }
+            }
+        }
+        if root.has-demo: Caption { text: "Takes out only the sample entries and accounts. Your own stay."; wrap: word-wrap; }
+        if !root.confirm-erase: HorizontalLayout {
+            alignment: start;
+            PillButton {
+                text: "Erase everything…";
+                icon: Icons.trash;
+                kind: ButtonStyle.danger;
+                small: true;
+                clicked => { root.confirm-erase = true; root.confirm-restore = false; }
+            }
+        }
+        if root.confirm-erase: VerticalLayout {
+            spacing: Theme.space-2;
+            Text {
+                text: "Deletes all accounts, entries, categories, budgets and the PIN from this phone. Back up first if you may want them again.";
+                font-size: Type.label;
+                font-weight: 600;
+                color: Theme.c.negative;
+                wrap: word-wrap;
+            }
+            HorizontalLayout {
+                spacing: Theme.space-2;
+                PillButton { text: "Cancel"; kind: ButtonStyle.ghost; on: TileStyle.surface; clicked => { root.confirm-erase = false; } }
+                PillButton {
+                    horizontal-stretch: 1;
+                    text: "Erase everything";
+                    icon: Icons.trash;
+                    kind: ButtonStyle.danger;
+                    clicked => { root.confirm-erase = false; root.erase-all(); }
+                }
+            }
+        }
     }
 
     Tile {
         style: TileStyle.soft;
         inner-spacing: Theme.space-2;
-        order: 5;
+        order: 8;
         CardHeader { title: "Private by design"; on: TileStyle.soft; }
         Text {
             text: "Everything stays in a database on this phone. No account, no internet permission, no ads.";

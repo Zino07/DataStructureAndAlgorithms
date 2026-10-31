@@ -1212,3 +1212,48 @@ export component Swatch inherits Rectangle {
     }
     ta := TouchArea { clicked => { root.clicked(); } }
 }
+
+// On/off row with a sliding knob.
+export component Switch inherits Rectangle {
+    in property <string> text;
+    in property <string> note;
+    in property <bool> on;
+    callback toggled(bool);
+    accessible-role: switch;
+    accessible-label: root.text;
+    accessible-checkable: true;
+    accessible-checked: root.on;
+    accessible-action-default => { root.toggled(!root.on); }
+    height: lay.preferred-height;
+    lay := HorizontalLayout {
+        spacing: Theme.space-3;
+        VerticalLayout {
+            horizontal-stretch: 1;
+            alignment: center;
+            spacing: 2px;
+            Text { text: root.text; font-size: Type.label + 1px; font-weight: 600; color: Theme.c.ink; }
+            if root.note != "": Caption { text: root.note; wrap: word-wrap; }
+        }
+        Rectangle {
+            width: 52px;
+            height: 32px;
+            y: (parent.height - self.height) / 2;
+            border-radius: 16px;
+            background: root.on ? Theme.c.accent : Ink.raised(TileStyle.surface);
+            border-width: root.on ? 0px : 1px;
+            border-color: Theme.c.line;
+            animate background { duration: Motion.quick; }
+            Rectangle {
+                x: root.on ? parent.width - self.width - 4px : 4px;
+                y: 4px;
+                width: 24px;
+                height: 24px;
+                border-radius: 12px;
+                background: root.on ? Theme.c.on-accent : Theme.c.ink-muted;
+                animate x { duration: Motion.snappy; easing: spring(0.2); }
+            }
+        }
+    }
+    TouchArea { clicked => { root.toggled(!root.on); } }
+}
+

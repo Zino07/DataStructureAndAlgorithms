@@ -149,6 +149,7 @@ fn settings_round_trip_and_clamp() {
         .save_settings(&Settings {
             currency: "AED".into(),
             cycle_start_day: 40,
+            work_hours: 30,
             palette: 9,
             dark: false,
             weekend: Weekend::SatSun,
@@ -161,7 +162,8 @@ fn settings_round_trip_and_clamp() {
     assert_eq!(s.style, 1);
     assert!(s.reduce_motion && s.solid_glass);
     assert_eq!(s.currency, "AED");
-    assert_eq!(s.cycle_start_day, 28);
+    assert_eq!(s.cycle_start_day, 31);
+    assert_eq!(s.work_hours, 16);
     assert_eq!(s.palette, 3);
     assert!(!s.dark);
     assert_eq!(s.weekend, Weekend::SatSun);

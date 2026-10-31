@@ -43,6 +43,7 @@ export struct TxRow {
     time: string,
     income: bool,
     icon: string,
+    upcoming: bool,           // dated after today: planned, not counted yet
 }
 
 export struct CategoryItem {
@@ -73,6 +74,46 @@ export struct AccountItem {
     negative: bool,
     share: float,             // share of all positive balances, 0..1
     percent: string,          // "62%" or ""
+    kind-index: int,          // 0 cash, 1 bank, 2 card, 3 savings
+    opening: string,          // keypad text of the opening balance
+    entries: int,             // entries + transfers that use it
+}
+
+// One row of the category manager.
+export struct CatRow {
+    id: int,
+    name: string,
+    icon: string,             // path data
+    icon-key: string,
+    uses: int,
+    hidden: bool,
+    work: bool,               // income that counts as paid working time
+    income: bool,
+    has-budget: bool,
+    first: bool,
+    last: bool,
+}
+
+export struct IconChoice {
+    key: string,
+    path: string,
+}
+
+export struct RepeatRow {
+    id: int,
+    title: string,
+    meta: string,
+    amount: string,
+    icon: string,
+    income: bool,
+    active: bool,
+}
+
+// One cell of the calendar grid; day 0 is an empty cell before the 1st.
+export struct CalDay {
+    day: int,
+    days-ago: int,            // negative: in the future
+    today: bool,
 }
 
 export struct SuggestionItem {

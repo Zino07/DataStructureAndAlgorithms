@@ -1,12 +1,13 @@
 import { Theme, Type, Icons, Motion } from "../theme.slint";
 import { Tile, TileStyle, PillNav, Chip, ChipScroller, Caption, CardTitle, Amount, IconButton, IconButtonStyle,
          PillButton, ButtonStyle, Field, Icon, CategoryTile, Ink, TouchGlow } from "../components/bento.slint";
-import { CategoryItem, AccountItem, SuggestionItem } from "../data.slint";
+import { CategoryItem, AccountItem, SuggestionItem, CalDay } from "../data.slint";
 
 component Key inherits Rectangle {
     in property <string> text;
     in property <string> icon;
     in property <string> label: root.text;
+    in property <bool> op: false;
     callback pressed;
     accessible-role: button;
     accessible-label: root.label;
@@ -14,7 +15,7 @@ component Key inherits Rectangle {
     height: 52px;
     border-radius: self.height / 2;
     clip: Theme.glass;
-    background: ta.pressed ? Theme.c.surface-muted : Theme.c.surface;
+    background: ta.pressed ? Theme.c.surface-muted : root.op ? Theme.c.surface-muted : Theme.c.surface;
     border-width: Theme.glass ? 1px : 0px;
     border-color: #ffffff12;
     animate background { duration: 90ms; }
@@ -25,7 +26,7 @@ component Key inherits Rectangle {
         text: root.text;
         font-size: 22px;
         font-weight: 500;
-        color: Theme.c.ink;
+        color: root.op ? Theme.c.accent-ink : Theme.c.ink;
     }
     if root.icon != "": Icon { data: root.icon; size: 22px; }
     ta := TouchArea { clicked => { root.pressed(); } }
@@ -44,8 +45,16 @@ export component AddScreen inherits VerticalLayout {
     // returns "" on success, otherwise an error message
     callback save(int /* editing id, -1 new */, int /* kind 0/1/2 */, string /* amount */,
                   int /* category */, int /* account */, int /* to account */,
-                  int /* days ago */, int /* minute, -1 now */, string /* note */) -> string;
+                  int /* days ago, negative = planned */, int /* minute, -1 now */, string /* note */,
+                  int /* repeat: 0 never, 1 daily, 2 weekly, 3 monthly, 4 yearly */) -> string;
     callback delete(int);
+    callback delete-transfer(int);
+    // calendar grid for the month `offset` months from the current one
+    pure callback month-title(int) -> string;
+    pure callback month-grid(int) -> [CalDay];
+    in property <[string]> week-heads;
+    // shows the result of an amount typed as a sum, "" for a plain number
+    pure callback calc-preview(string) -> string;
     // keypad editing lives in Rust (validation of decimals and length)
     pure callback edit-amount(string /* current */, string /* key */) -> string;
     pure callback day-label(int /* days ago */) -> string;
@@ -60,6 +69,10 @@ export component AddScreen inherits VerticalLayout {
     property <int> to-account: root.accounts.length > 1 ? root.accounts[1].id : -1;
     property <int> days-ago: 0;
     property <int> minute: 0;
+    property <int> repeat: 0;
+    property <bool> show-calendar: false;
+    property <int> cal-offset: 0;
+    property <string> preview: root.calc-preview(root.amount);
     property <bool> custom-time: false;
     property <string> note;
     property <[CategoryItem]> categories: kind == 1 ? income-categories : expense-categories;
@@ -75,6 +88,9 @@ export component AddScreen inherits VerticalLayout {
         root.custom-time = false;
         root.note = "";
         root.error = "";
+        root.repeat = 0;
+        root.show-calendar = false;
+        root.cal-offset = 0;
         root.account = root.accounts.length > 0 ? root.accounts[0].id : -1;
         root.to-account = root.accounts.length > 1 ? root.accounts[1].id : -1;
     }
@@ -85,12 +101,16 @@ export component AddScreen inherits VerticalLayout {
     }
 
     public function load(id: int, kind: int, amount: string, category: int, account: int,
-                         days-ago: int, minute: int, note: string) {
+                         to-account: int, days-ago: int, minute: int, note: string) {
         root.editing = id;
         root.kind = kind;
         root.amount = amount;
         root.category = category;
         root.account = account;
+        root.to-account = to-account;
+        root.repeat = 0;
+        root.show-calendar = false;
+        root.cal-offset = 0;
         root.days-ago = days-ago;
         root.minute = minute;
         root.custom-time = true;
@@ -103,7 +123,7 @@ export component AddScreen inherits VerticalLayout {
 
     public function submit() {
         root.error = root.save(root.editing, root.kind, root.amount, root.category, root.account,
-            root.to-account, root.days-ago, root.custom-time ? root.minute : -1, root.note);
+            root.to-account, root.days-ago, root.custom-time ? root.minute : -1, root.note, root.repeat);
         // the form is reset when it opens next time, so it does not blank
         // out while it shrinks back into the button
         if root.error == "" {
@@ -159,7 +179,7 @@ export component AddScreen inherits VerticalLayout {
             clicked => { root.close(); }
         }
         Text {
-            text: root.editing >= 0 ? "Edit entry" : root.kind == 2 ? "Move money" : "New entry";
+            text: root.editing >= 0 ? (root.kind == 2 ? "Edit transfer" : "Edit entry") : root.kind == 2 ? "Move money" : "New entry";
             font-size: Type.h2;
             font-weight: 600;
             color: Theme.c.ink;
@@ -170,13 +190,17 @@ export component AddScreen inherits VerticalLayout {
             icon: Icons.trash;
             label: "Delete entry";
             clicked => {
-                root.delete(root.editing);
+                if root.kind == 2 {
+                    root.delete-transfer(root.editing);
+                } else {
+                    root.delete(root.editing);
+                }
                 root.close();
             }
         }
     }
 
-    PillNav {
+    if !(root.editing >= 0 && root.kind == 2): PillNav {
         items: root.editing >= 0 ? ["Expense", "Income"] : ["Expense", "Income", "Transfer"];
         current <=> root.kind;
         changed => {
@@ -203,9 +227,13 @@ export component AddScreen inherits VerticalLayout {
         Amount {
             value: root.amount == "" ? "0" : root.amount;
             unit: root.currency;
-            size: Type.metric-xl;
+            size: root.amount.character-count > 11 ? Type.metric-md : Type.metric-xl;
             on: TileStyle.inverse;
             color: root.amount == "" ? Ink.fg(TileStyle.inverse).with-alpha(0.35) : Ink.fg(TileStyle.inverse);
+        }
+        if root.preview != "": Caption {
+            text: "= " + root.preview + " " + root.currency;
+            on: TileStyle.inverse;
         }
         if root.error != "": HorizontalLayout {
             spacing: 6px;
@@ -317,11 +345,13 @@ export component AddScreen inherits VerticalLayout {
                 clicked => { root.days-ago += 1; }
             }
             Chip {
-                text: root.days-ago >= 2 ? root.short-day(root.days-ago) : "Other";
-                active: root.days-ago >= 2;
-                outline: root.days-ago < 2;
+                text: root.days-ago >= 2 || root.days-ago < 0 ? root.short-day(root.days-ago) : "Pick date";
+                icon: Icons.calendar;
+                active: root.days-ago >= 2 || root.days-ago < 0;
+                outline: root.days-ago >= 0 && root.days-ago < 2;
                 clicked => {
-                    if root.days-ago < 2 { root.days-ago = 2; }
+                    root.show-calendar = !root.show-calendar;
+                    root.cal-offset = 0;
                 }
             }
             IconButton {
@@ -329,10 +359,90 @@ export component AddScreen inherits VerticalLayout {
                 small: true;
                 kind: IconButtonStyle.muted;
                 label: "Later day";
-                enabled: root.days-ago > 0;
+                enabled: root.days-ago > -365;
                 transform-rotation: 180deg;
                 clicked => { root.days-ago -= 1; }
             }
+        }
+        if root.show-calendar: Rectangle {
+            background: Theme.c.surface;
+            border-radius: Theme.radius-md;
+            VerticalLayout {
+                padding: Theme.space-3;
+                spacing: Theme.space-2;
+                HorizontalLayout {
+                    spacing: Theme.space-2;
+                    IconButton {
+                        icon: Icons.back;
+                        small: true;
+                        kind: IconButtonStyle.muted;
+                        label: "Previous month";
+                        enabled: root.cal-offset > -60;
+                        clicked => { root.cal-offset -= 1; }
+                    }
+                    Text {
+                        text: root.month-title(root.cal-offset);
+                        horizontal-stretch: 1;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                        font-size: Type.body;
+                        font-weight: 600;
+                        color: Theme.c.ink;
+                    }
+                    IconButton {
+                        icon: Icons.back;
+                        small: true;
+                        kind: IconButtonStyle.muted;
+                        label: "Next month";
+                        enabled: root.cal-offset < 12;
+                        transform-rotation: 180deg;
+                        clicked => { root.cal-offset += 1; }
+                    }
+                }
+                HorizontalLayout {
+                    for h in root.week-heads: Text {
+                        horizontal-stretch: 1;
+                        preferred-width: 1px;
+                        text: h;
+                        horizontal-alignment: center;
+                        font-size: Type.caption;
+                        font-weight: 600;
+                        color: Theme.c.ink-muted;
+                    }
+                }
+                GridLayout {
+                    spacing: 2px;
+                    for cell[i] in root.month-grid(root.cal-offset): Rectangle {
+                        row: floor(i / 7);
+                        col: Math.mod(i, 7);
+                        height: 40px;
+                        border-radius: 20px;
+                        background: cell.day > 0 && cell.days-ago == root.days-ago ? Theme.c.accent : transparent;
+                        border-width: cell.today ? 1px : 0px;
+                        border-color: Theme.c.accent-ink;
+                        accessible-role: button;
+                        accessible-label: cell.day > 0 ? root.short-day(cell.days-ago) : "";
+                        accessible-action-default => { if cell.day > 0 { root.days-ago = cell.days-ago; root.show-calendar = false; } }
+                        if cell.day > 0: Text {
+                            text: cell.day;
+                            font-size: Type.label + 1px;
+                            font-weight: cell.today ? 700 : 500;
+                            color: cell.days-ago == root.days-ago ? Theme.c.on-accent : cell.days-ago < 0 ? Theme.c.ink-muted : Theme.c.ink;
+                        }
+                        if cell.day > 0: TouchArea {
+                            clicked => {
+                                root.days-ago = cell.days-ago;
+                                root.show-calendar = false;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if root.days-ago < 0: Caption {
+            text: "Planned for " + root.day-label(root.days-ago) + ". It shows in Activity now and counts in your balance and totals when that day comes.";
+            wrap: word-wrap;
+            on: TileStyle.muted;
         }
         HorizontalLayout {
             spacing: Theme.space-2;
@@ -387,27 +497,51 @@ export component AddScreen inherits VerticalLayout {
         text <=> root.note;
     }
 
+    if root.editing < 0 && root.kind != 2: VerticalLayout {
+        spacing: Theme.space-2;
+        Caption { text: "Repeat"; on: TileStyle.muted; }
+        ChipScroller {
+            for r[i] in ["Never", "Every day", "Every week", "Every month", "Every year"]: Chip {
+                text: r;
+                active: root.repeat == i;
+                clicked => { root.repeat = i; }
+            }
+        }
+    }
+
+    // sums work too: 12.5 × 3 + 4
+    if root.preview != "": PillButton {
+        text: "= " + root.preview;
+        kind: ButtonStyle.accent;
+        small: true;
+        clicked => { root.press("="); }
+    }
+
     GridLayout {
         spacing: Theme.space-2;
         Row {
             Key { text: "1"; pressed => { root.press("1"); } }
             Key { text: "2"; pressed => { root.press("2"); } }
             Key { text: "3"; pressed => { root.press("3"); } }
+            Key { text: "÷"; label: "Divide"; op: true; pressed => { root.press("÷"); } }
         }
         Row {
             Key { text: "4"; pressed => { root.press("4"); } }
             Key { text: "5"; pressed => { root.press("5"); } }
             Key { text: "6"; pressed => { root.press("6"); } }
+            Key { text: "×"; label: "Multiply"; op: true; pressed => { root.press("×"); } }
         }
         Row {
             Key { text: "7"; pressed => { root.press("7"); } }
             Key { text: "8"; pressed => { root.press("8"); } }
             Key { text: "9"; pressed => { root.press("9"); } }
+            Key { text: "−"; label: "Subtract"; op: true; pressed => { root.press("−"); } }
         }
         Row {
             Key { text: "."; label: "Decimal point"; pressed => { root.press("."); } }
             Key { text: "0"; pressed => { root.press("0"); } }
             Key { icon: Icons.backspace; label: "Delete digit"; pressed => { root.press("<"); } }
+            Key { text: "+"; label: "Add"; op: true; pressed => { root.press("+"); } }
         }
     }
 

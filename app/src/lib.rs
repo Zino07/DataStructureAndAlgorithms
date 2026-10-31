@@ -5,6 +5,9 @@ slint::include_modules!();
 mod aurora;
 pub mod demo;
 mod icons;
+mod manage;
+
+use manage::{shift_days, wire_manage};
 
 use std::cell::{Cell, RefCell};
 use std::error::Error;
@@ -23,18 +26,23 @@ const TOAST_MS: u64 = 4_000;
 /// (or `INCOME_RADAR_TODAY="YYYY-MM-DD"`) pins the clock for screenshots,
 /// demos and simulations.
 pub fn now() -> (NaiveDate, u16) {
-    if let Ok(s) = std::env::var("INCOME_RADAR_NOW") {
-        if let Ok(dt) = NaiveDateTime::parse_from_str(&s, "%Y-%m-%d %H:%M") {
-            return (dt.date(), (dt.hour() * 60 + dt.minute()) as u16);
+    // The test clock exists for screenshots and simulations on a computer;
+    // the Android build always uses the real time.
+    #[cfg(not(target_os = "android"))]
+    {
+        if let Ok(s) = std::env::var("INCOME_RADAR_NOW") {
+            if let Ok(dt) = NaiveDateTime::parse_from_str(&s, "%Y-%m-%d %H:%M") {
+                return (dt.date(), (dt.hour() * 60 + dt.minute()) as u16);
+            }
+        }
+        if let Ok(s) = std::env::var("INCOME_RADAR_TODAY") {
+            if let Ok(d) = NaiveDate::parse_from_str(&s, "%Y-%m-%d") {
+                return (d, 14 * 60 + 5);
+            }
         }
     }
     let local = Local::now();
     let minute = (local.hour() * 60 + local.minute()) as u16;
-    if let Ok(s) = std::env::var("INCOME_RADAR_TODAY") {
-        if let Ok(d) = NaiveDate::parse_from_str(&s, "%Y-%m-%d") {
-            return (d, 14 * 60 + 5);
-        }
-    }
     (local.date_naive(), minute)
 }
 
@@ -45,14 +53,27 @@ pub fn today() -> NaiveDate {
 /// What the Undo button in the toast reverts.
 enum Undo {
     Created(Id),
+    /// An entry plus the repeating entry made with it.
+    CreatedRepeating(Id, Id),
     CreatedTransfer(Id),
     Deleted(NewTransaction),
     DeletedTransfer(NewTransfer),
     Edited(Id, NewTransaction),
+    EditedTransfer(Id, NewTransfer),
 }
+
+/// Wrong PINs tolerated before the lock screen makes you wait.
+const PIN_TRIES: u32 = 5;
+/// Seconds in the background before the PIN is asked again.
+const RELOCK_SECS: u64 = 20;
 
 struct Ctx {
     store: Store,
+    /// where backups and exports are written
+    export_dir: std::path::PathBuf,
+    wrong_pins: Cell<u32>,
+    locked_until: Cell<Option<std::time::Instant>>,
+    inactive_since: Cell<Option<std::time::Instant>>,
     activity_filter: Cell<i32>,
     query: RefCell<String>,
     stats_range: Cell<i32>,
@@ -66,6 +87,11 @@ struct Ctx {
 
 /// Opens (or creates) the database in `data_dir` and builds the window.
 pub fn build(data_dir: &Path) -> Result<AppWindow, Box<dyn Error>> {
+    build_with(data_dir, &data_dir.join("exports"))
+}
+
+/// Like [`build`], with the folder where backups and CSV exports are written.
+pub fn build_with(data_dir: &Path, export_dir: &Path) -> Result<AppWindow, Box<dyn Error>> {
     std::fs::create_dir_all(data_dir)?;
     let store = Store::open(data_dir.join("income-radar.db"))?;
     let ui = AppWindow::new()?;
@@ -74,8 +100,13 @@ pub fn build(data_dir: &Path) -> Result<AppWindow, Box<dyn Error>> {
         ui.set_min_top_inset(28.0);
         ui.set_min_bottom_inset(16.0);
     }
+    let locked = store.has_pin().unwrap_or(false);
     let ctx = Rc::new(Ctx {
         store,
+        export_dir: export_dir.to_path_buf(),
+        wrong_pins: Cell::new(0),
+        locked_until: Cell::new(None),
+        inactive_since: Cell::new(None),
         activity_filter: Cell::new(0),
         query: RefCell::new(String::new()),
         stats_range: Cell::new(0),
@@ -85,6 +116,7 @@ pub fn build(data_dir: &Path) -> Result<AppWindow, Box<dyn Error>> {
         last_minute: Cell::new(now()),
         aurora_palette: Cell::new(-1),
     });
+    ui.set_locked(locked);
     wire(&ui, &ctx);
     refresh(&ui, &ctx);
 
@@ -93,11 +125,22 @@ pub fn build(data_dir: &Path) -> Result<AppWindow, Box<dyn Error>> {
     // it; a strong one would keep the database open after the window closes.
     let weak = ui.as_weak();
     let c = Rc::downgrade(&ctx);
+    let last_tick = Cell::new(std::time::SystemTime::now());
     ctx.clock_timer.start(
         slint::TimerMode::Repeated,
-        Duration::from_secs(15),
+        Duration::from_secs(5),
         move || {
             let Some(c) = c.upgrade() else { return };
+            // a long gap between ticks means the phone was asleep or the app was away
+            let gap = last_tick
+                .replace(std::time::SystemTime::now())
+                .elapsed()
+                .unwrap_or_default();
+            if gap > Duration::from_secs(RELOCK_SECS + 10) && c.store.has_pin().unwrap_or(false) {
+                if let Some(ui) = weak.upgrade() {
+                    ui.set_locked(true);
+                }
+            }
             let n = now();
             if n != c.last_minute.get() {
                 c.last_minute.set(n);
@@ -152,17 +195,17 @@ fn wire(ui: &AppWindow, ctx: &Rc<Ctx>) {
     ui.on_edit_amount(|current, key| edit_amount(&current, &key).into());
     ui.on_day_label(|days_ago| {
         let today = today();
-        day_label(today - chrono::Days::new(days_ago.max(0) as u64), today).into()
+        day_label(shift_days(today, days_ago), today).into()
     });
     ui.on_short_day(|days_ago| {
-        let date = today() - chrono::Days::new(days_ago.max(0) as u64);
+        let date = shift_days(today(), days_ago);
         date.format("%-d %b").to_string().into()
     });
     ui.on_time_label(|minute| time_label(minute.clamp(0, 1439) as u16).into());
 
     ui.on_save_entry({
         let (ctx, weak) = (ctx.clone(), weak.clone());
-        move |id, kind, amount, category, account, to_account, days_ago, minute, note| {
+        move |id, kind, amount, category, account, to_account, days_ago, minute, note, repeat| {
             let Some(ui) = weak.upgrade() else {
                 return SharedString::new();
             };
@@ -175,6 +218,7 @@ fn wire(ui: &AppWindow, ctx: &Rc<Ctx>) {
                 days_ago,
                 minute,
                 note: note.to_string(),
+                repeat,
             };
             match save_entry(&ctx.store, id, &input) {
                 Ok((message, undo)) => {
@@ -236,13 +280,14 @@ fn wire(ui: &AppWindow, ctx: &Rc<Ctx>) {
             let Some(ui) = weak.upgrade() else { return };
             match ctx.store.transaction(id as Id) {
                 Ok(Some(t)) => {
-                    let days_ago = (today() - t.date).num_days().max(0) as i32;
+                    let days_ago = (today() - t.date).num_days() as i32;
                     ui.invoke_load_entry(
                         t.id as i32,
                         if t.kind == Kind::Income { 1 } else { 0 },
                         plain_amount(t.amount).into(),
                         t.category_id as i32,
                         t.account_id as i32,
+                        -1,
                         days_ago,
                         t.minute as i32,
                         t.note.into(),
@@ -260,6 +305,11 @@ fn wire(ui: &AppWindow, ctx: &Rc<Ctx>) {
             let undo = ctx.undo.borrow_mut().take();
             let result = match undo {
                 Some(Undo::Created(id)) => ctx.store.delete_transaction(id).map(|_| ()),
+                Some(Undo::CreatedRepeating(id, rec)) => ctx
+                    .store
+                    .delete_recurring(rec)
+                    .and_then(|_| ctx.store.delete_transaction(id).map(|_| ())),
+                Some(Undo::EditedTransfer(id, t)) => ctx.store.update_transfer(id, &t),
                 Some(Undo::CreatedTransfer(id)) => ctx.store.delete_transfer(id).map(|_| ()),
                 Some(Undo::Deleted(t)) => ctx.store.add_transaction(&t).map(|_| ()),
                 Some(Undo::DeletedTransfer(t)) => ctx.store.add_transfer(&t).map(|_| ()),
@@ -345,20 +395,6 @@ fn wire(ui: &AppWindow, ctx: &Rc<Ctx>) {
         }
     });
 
-    ui.on_archive_account({
-        let (ctx, weak) = (ctx.clone(), weak.clone());
-        move |id| match ctx.store.archive_account(id as Id) {
-            Ok(()) => {
-                if let Some(ui) = weak.upgrade() {
-                    refresh(&ui, &ctx);
-                    toast(&ui, &ctx, "Account archived", None);
-                }
-                SharedString::new()
-            }
-            Err(e) => capitalize(&e.to_string()).into(),
-        }
-    });
-
     ui.on_save_budget({
         let (ctx, weak) = (ctx.clone(), weak.clone());
         move |id, text| {
@@ -412,7 +448,7 @@ fn wire(ui: &AppWindow, ctx: &Rc<Ctx>) {
     });
     ui.on_cycle_day_changed({
         let update = update_settings.clone();
-        move |d| update(&|s| s.cycle_start_day = d.clamp(1, 28) as u32)
+        move |d| update(&|s| s.cycle_start_day = d.clamp(1, 31) as u32)
     });
     ui.on_weekend_changed({
         let update = update_settings.clone();
@@ -454,6 +490,8 @@ fn wire(ui: &AppWindow, ctx: &Rc<Ctx>) {
             }
         }
     });
+
+    wire_manage(ui, ctx);
 }
 
 type SettingsUpdate = Rc<dyn Fn(&dyn Fn(&mut Settings))>;
@@ -474,29 +512,37 @@ pub struct EntryInput {
     pub category: i32,
     pub account: i32,
     pub to_account: i32,
+    /// negative: planned for a future day
     pub days_ago: i32,
     /// -1 means "now"
     pub minute: i32,
     pub note: String,
+    /// 0 never, 1 daily, 2 weekly, 3 monthly, 4 yearly
+    pub repeat: i32,
 }
 
 /// Validates and stores an entry. Returns the toast message and how to undo it.
 fn save_entry(store: &Store, editing: i32, e: &EntryInput) -> Result<(String, Undo), String> {
-    let amount = match Money::parse(&e.amount) {
+    let parsed = if calc::has_operator(&e.amount) {
+        calc::eval(&e.amount).map_err(|err| capitalize(&err.to_string()))
+    } else {
+        Money::parse(&e.amount).map_err(|err| match err {
+            ParseMoneyError::Empty => "Enter an amount".to_string(),
+            other => capitalize(&other.to_string()),
+        })
+    };
+    let amount = match parsed {
         Ok(m) if m.0 > 0 => m,
-        Ok(_) | Err(ParseMoneyError::Empty) => return Err("Enter an amount".into()),
-        Err(err) => return Err(capitalize(&err.to_string())),
+        Ok(_) => return Err("Enter an amount".into()),
+        Err(msg) => return Err(msg),
     };
     let (today, now_minute) = now();
-    let date = today - chrono::Days::new(e.days_ago.clamp(0, 365) as u64);
+    let date = shift_days(today, e.days_ago.clamp(-366, 3650));
     let minute = if e.minute < 0 {
         now_minute
     } else {
         e.minute.clamp(0, 1439) as u16
     };
-    if date == today && e.minute >= 0 && minute > now_minute + 5 {
-        return Err("That time is still in the future".into());
-    }
     if e.account < 0 {
         return Err("Add an account first".into());
     }
@@ -506,16 +552,38 @@ fn save_entry(store: &Store, editing: i32, e: &EntryInput) -> Result<(String, Un
         if e.to_account < 0 {
             return Err("Add a second account to move money".into());
         }
-        let id = store
-            .add_transfer(&NewTransfer {
-                from_account: e.account as Id,
-                to_account: e.to_account as Id,
-                amount,
-                date,
-                minute,
-                note: e.note.clone(),
-            })
-            .map_err(fail)?;
+        let transfer = NewTransfer {
+            from_account: e.account as Id,
+            to_account: e.to_account as Id,
+            amount,
+            date,
+            minute,
+            note: e.note.clone(),
+        };
+        if editing >= 0 {
+            let before = store
+                .transfer(editing as Id)
+                .map_err(fail)?
+                .ok_or_else(|| "This transfer no longer exists".to_string())?;
+            store
+                .update_transfer(editing as Id, &transfer)
+                .map_err(fail)?;
+            return Ok((
+                "Changes saved".into(),
+                Undo::EditedTransfer(
+                    editing as Id,
+                    NewTransfer {
+                        from_account: before.from_account,
+                        to_account: before.to_account,
+                        amount: before.amount,
+                        date: before.date,
+                        minute: before.minute,
+                        note: before.note,
+                    },
+                ),
+            ));
+        }
+        let id = store.add_transfer(&transfer).map_err(fail)?;
         return Ok((
             format!("Moved {}", amount.format()),
             Undo::CreatedTransfer(id),
@@ -556,34 +624,112 @@ fn save_entry(store: &Store, editing: i32, e: &EntryInput) -> Result<(String, Un
     } else {
         "Expense"
     };
-    Ok((
-        format!("{what} saved · {}", amount.format()),
-        Undo::Created(id),
-    ))
+    let mut message = format!("{what} saved · {}", amount.format());
+    if date > today {
+        message = format!(
+            "Planned for {} · {}",
+            date.format("%-d %b"),
+            amount.format()
+        );
+    }
+    // a negative balance is allowed (credit cards, overdrafts) but never a surprise
+    store.set_today(today);
+    if entry.kind == Kind::Expense && date <= today {
+        if let Ok(list) = store.accounts_with_balances() {
+            if let Some(a) = list.iter().find(|a| a.account.id == entry.account_id) {
+                if a.balance.0 < 0 && a.balance.0 + amount.0 >= 0 {
+                    message = format!("{message} · {} is now below zero", a.account.name);
+                }
+            }
+        }
+    }
+    let repeat = match e.repeat {
+        1 => Some(Repeat::Daily),
+        2 => Some(Repeat::Weekly),
+        3 => Some(Repeat::Monthly),
+        4 => Some(Repeat::Yearly),
+        _ => None,
+    };
+    if let Some(repeat) = repeat {
+        let rec = store
+            .add_recurring(&NewRecurring {
+                account_id: entry.account_id,
+                category_id: entry.category_id,
+                kind: entry.kind,
+                amount,
+                minute,
+                note: entry.note.clone(),
+                repeat,
+                first_date: Store::next_occurrence(date, repeat),
+            })
+            .map_err(fail)?;
+        // a repeat that starts in the past catches up right away
+        let _ = store.run_recurring(today);
+        message = format!("{message} · {}", repeat.label().to_lowercase());
+        return Ok((message, Undo::CreatedRepeating(id, rec)));
+    }
+    Ok((message, Undo::Created(id)))
 }
 
-/// Keypad editing: digits, one decimal point, at most two decimals, 12 characters.
+/// Keypad editing. Digits, one decimal point per number (as many decimals as
+/// the currency has), the four operators for sums like `12.5×3+4`, `=` to
+/// work the sum out, `<` to delete.
 pub fn edit_amount(current: &str, key: &str) -> String {
+    const OPS: [char; 4] = ['+', '−', '×', '÷'];
     let mut s = current.to_string();
+    let segment_start = |s: &str| {
+        s.rfind(|c: char| OPS.contains(&c))
+            .map(|i| i + s[i..].chars().next().map_or(1, char::len_utf8))
+            .unwrap_or(0)
+    };
     match key {
         "<" => {
             s.pop();
         }
+        "=" => {
+            if calc::has_operator(&s) {
+                if let Ok(m) = calc::eval(&s) {
+                    if m.0 > 0 {
+                        return m.plain();
+                    }
+                }
+            }
+        }
+        op if op.chars().count() == 1 && OPS.contains(&op.chars().next().unwrap_or(' ')) => {
+            if s.is_empty() || s.chars().count() >= 40 {
+                return s;
+            }
+            // a second operator replaces the first; a dangling point goes
+            if s.ends_with(|c: char| OPS.contains(&c)) || s.ends_with('.') {
+                s.pop();
+            }
+            s.push_str(op);
+        }
         "." => {
-            if !s.contains('.') && s.len() < 12 {
-                if s.is_empty() {
+            let seg = &s[segment_start(&s)..];
+            if !seg.contains('.')
+                && seg.len() < 12
+                && s.chars().count() < 40
+                && Money::decimals() > 0
+            {
+                if seg.is_empty() {
                     s.push('0');
                 }
                 s.push('.');
             }
         }
         d if d.len() == 1 && d.as_bytes()[0].is_ascii_digit() => {
-            let decimals = s.find('.').map(|i| s.len() - i - 1);
-            if s.len() >= 12 || decimals.is_some_and(|n| n >= 2) {
+            let start = segment_start(&s);
+            let seg = &s[start..];
+            let decimals = seg.find('.').map(|i| seg.len() - i - 1);
+            if seg.len() >= 12
+                || decimals.is_some_and(|n| n >= Money::decimals() as usize)
+                || s.chars().count() >= 40
+            {
                 return s;
             }
-            if s == "0" {
-                s.clear();
+            if seg == "0" {
+                s.truncate(start);
             }
             s.push_str(d);
         }
@@ -594,13 +740,7 @@ pub fn edit_amount(current: &str, key: &str) -> String {
 
 /// Keypad text for an amount: `"1250.5"` → `"1250.50"`, no grouping.
 fn plain_amount(m: Money) -> String {
-    let whole = m.0 / 100;
-    let frac = m.0 % 100;
-    if frac == 0 {
-        whole.to_string()
-    } else {
-        format!("{whole}.{frac:02}")
-    }
+    m.plain()
 }
 
 fn model<T: Clone + 'static>(items: Vec<T>) -> ModelRc<T> {
@@ -611,6 +751,7 @@ fn day_label(date: NaiveDate, today: NaiveDate) -> String {
     match (today - date).num_days() {
         0 => "Today".into(),
         1 => "Yesterday".into(),
+        -1 => "Tomorrow".into(),
         _ if date.year() == today.year() => date.format("%a, %-d %b").to_string(),
         _ => date.format("%-d %b %Y").to_string(),
     }
@@ -647,6 +788,7 @@ fn tx_row(t: &Transaction, today: NaiveDate, with_date: bool) -> TxRow {
         .into(),
         income: t.kind == Kind::Income,
         icon: icons::path(&t.category_icon).into(),
+        upcoming: t.date > today,
     }
 }
 
@@ -812,6 +954,7 @@ fn try_refresh_activity(ui: &AppWindow, ctx: &Ctx, today: NaiveDate) -> Result<(
                 time: time_label(t.minute).into(),
                 income: false,
                 icon: icons::path("transfer").into(),
+                upcoming: t.date > today,
             });
         }
         if !query.is_empty() {
@@ -824,6 +967,23 @@ fn try_refresh_activity(ui: &AppWindow, ctx: &Ctx, today: NaiveDate) -> Result<(
             _ => None,
         };
         let list = store.search(filter, &query, ACTIVITY_LIMIT)?;
+        // "All" also lists transfers (matching the search words like entries do)
+        let q = query.to_lowercase();
+        let transfers: Vec<Transfer> = if ctx.activity_filter.get() == 0 {
+            store
+                .transfers(ACTIVITY_LIMIT)?
+                .into_iter()
+                .filter(|t| {
+                    q.is_empty()
+                        || t.note.to_lowercase().contains(&q)
+                        || t.from_name.to_lowercase().contains(&q)
+                        || t.to_name.to_lowercase().contains(&q)
+                        || "transfer".contains(&q)
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
         for t in &list {
             let e = day_totals.entry(t.date).or_default();
             if t.kind == Kind::Expense {
@@ -832,9 +992,43 @@ fn try_refresh_activity(ui: &AppWindow, ctx: &Ctx, today: NaiveDate) -> Result<(
                 e.1 += t.amount;
             }
         }
-        for t in &list {
-            push_header(&mut rows, &day_totals, t.date);
-            rows.push(tx_row(t, today, false));
+        // newest first: merge the two lists by date, time, id
+        enum Item<'a> {
+            Tx(&'a Transaction),
+            Tr(&'a Transfer),
+        }
+        let mut merged: Vec<(NaiveDate, u16, Id, Item)> = list
+            .iter()
+            .map(|t| (t.date, t.minute, t.id, Item::Tx(t)))
+            .chain(
+                transfers
+                    .iter()
+                    .map(|t| (t.date, t.minute, t.id, Item::Tr(t))),
+            )
+            .collect();
+        merged.sort_by_key(|m| std::cmp::Reverse((m.0, m.1, m.2)));
+        merged.truncate(ACTIVITY_LIMIT);
+        for (date, _, _, item) in &merged {
+            push_header(&mut rows, &day_totals, *date);
+            match item {
+                Item::Tx(t) => rows.push(tx_row(t, today, false)),
+                Item::Tr(t) => rows.push(TxRow {
+                    id: t.id as i32,
+                    header: false,
+                    transfer: true,
+                    title: if t.note.is_empty() {
+                        "Transfer".into()
+                    } else {
+                        t.note.clone().into()
+                    },
+                    meta: format!("{} → {}", t.from_name, t.to_name).into(),
+                    amount: t.amount.format().into(),
+                    time: time_label(t.minute).into(),
+                    income: false,
+                    icon: icons::path("transfer").into(),
+                    upcoming: t.date > today,
+                }),
+            }
         }
         if !query.is_empty() {
             let spent: Money = list
@@ -847,10 +1041,11 @@ fn try_refresh_activity(ui: &AppWindow, ctx: &Ctx, today: NaiveDate) -> Result<(
                 .filter(|t| t.kind == Kind::Income)
                 .map(|t| t.amount)
                 .sum();
+            let count = list.len() + transfers.len();
             note = format!(
                 "{} {} · {} spent · {} received",
-                list.len(),
-                if list.len() == 1 { "match" } else { "matches" },
+                count,
+                if count == 1 { "match" } else { "matches" },
                 spent.format(),
                 earned.format()
             );
@@ -879,7 +1074,12 @@ fn sparse_label(i: usize, n: usize, label: String) -> SharedString {
 fn try_refresh(ui: &AppWindow, ctx: &Ctx) -> Result<(), StoreError> {
     let store = &ctx.store;
     let (today, minute) = now();
+    // planned entries stay out of balances and totals until their day; repeating
+    // entries that came due while the app was closed are created now
+    store.set_today(today);
+    store.run_recurring(today)?;
     let settings = store.settings()?;
+    Money::set_decimals(currency_decimals(&settings.currency));
 
     let theme = ui.global::<Theme>();
     theme.set_palette(settings.palette as i32);
@@ -904,6 +1104,18 @@ fn try_refresh(ui: &AppWindow, ctx: &Ctx) -> Result<(), StoreError> {
         glass.set_frost(image(&img.frost, img.frost_width, img.frost_height));
     }
     ui.set_cycle_day(settings.cycle_start_day as i32);
+    ui.set_work_hours(settings.work_hours as i32);
+    ui.set_has_pin(store.has_pin()?);
+    ui.set_has_demo(store.has_demo()?);
+    ui.set_week_heads(model(manage::week_heads(
+        settings.weekend == Weekend::FriSat,
+    )));
+    ui.set_expense_cat_rows(model(manage::cat_rows(store, Kind::Expense)?));
+    ui.set_income_cat_rows(model(manage::cat_rows(store, Kind::Income)?));
+    ui.set_icon_choices(model(manage::icon_choices()));
+    let repeats = manage::repeat_rows(store)?;
+    ui.set_repeat_count(repeats.len() as i32);
+    ui.set_repeat_rows(model(repeats));
     ui.set_weekend(if settings.weekend == Weekend::SatSun {
         1
     } else {
@@ -916,7 +1128,12 @@ fn try_refresh(ui: &AppWindow, ctx: &Ctx) -> Result<(), StoreError> {
     let (income_delta, income_up) = delta(radar.income_change_pct());
     let (expense_delta, expense_up) = delta(radar.expense_change_pct());
     let week_total: Money = radar.last_7_days.iter().map(|(_, m)| *m).sum();
-    let recent = store.transactions(None, 4)?;
+    let recent: Vec<Transaction> = store
+        .transactions(None, 40)?
+        .into_iter()
+        .filter(|t| t.date <= today)
+        .take(4)
+        .collect();
     let pace = radar.period.days_elapsed(today) as f32 / radar.period.total_days() as f32;
 
     ui.set_dash(Dashboard {
@@ -1113,6 +1330,15 @@ fn try_refresh(ui: &AppWindow, ctx: &Ctx) -> Result<(), StoreError> {
                 }
                 .into(),
                 id: a.account.id as i32,
+                kind_index: AccountKind::ALL
+                    .iter()
+                    .position(|k| *k == a.account.kind)
+                    .unwrap_or(0) as i32,
+                opening: a.account.opening.plain().into(),
+                entries: {
+                    let (e, t) = store.account_usage(a.account.id).unwrap_or((0, 0));
+                    (e + t) as i32
+                },
                 name: a.account.name.into(),
                 kind: a.account.kind.label().into(),
                 icon: icons::path(a.account.kind.icon()).into(),
@@ -1356,11 +1582,20 @@ fn try_refresh(ui: &AppWindow, ctx: &Ctx) -> Result<(), StoreError> {
 #[cfg(target_os = "android")]
 #[unsafe(no_mangle)]
 fn android_main(app: slint::android::AndroidApp) {
-    let data_dir = app
-        .internal_data_path()
-        .unwrap_or_else(|| std::path::PathBuf::from("/data/local/tmp/income-radar"));
-    slint::android::init(app).expect("Slint Android backend failed to start");
-    match build(&data_dir) {
+    // No fallback path: without an app data folder there is nowhere safe to keep the database.
+    let Some(data_dir) = app.internal_data_path() else {
+        eprintln!("startup failed: the app has no data folder");
+        return;
+    };
+    // backups and exports go where the user can reach them (Android/data/app.incomeradar/files)
+    let export_dir = app
+        .external_data_path()
+        .unwrap_or_else(|| data_dir.join("exports"));
+    if let Err(e) = slint::android::init(app) {
+        eprintln!("Slint Android backend failed to start: {e}");
+        return;
+    }
+    match build_with(&data_dir, &export_dir) {
         Ok(ui) => {
             if let Err(e) = ui.run() {
                 eprintln!("event loop failed: {e}");
@@ -1385,6 +1620,67 @@ mod tests {
         assert_eq!(type_keys(&["1", "2", "<"]), "1");
         assert_eq!(type_keys(&["<"]), "");
         assert_eq!(type_keys(&["9"; 20]).len(), 12);
+    }
+
+    #[test]
+    fn keypad_does_sums() {
+        let type_keys = |keys: &[&str]| keys.iter().fold(String::new(), |s, k| edit_amount(&s, k));
+        // operators need a number before them and replace each other
+        assert_eq!(type_keys(&["+", "5"]), "5");
+        assert_eq!(type_keys(&["5", "+", "×", "2"]), "5×2");
+        assert_eq!(type_keys(&["5", ".", "×", "2"]), "5×2");
+        // each number has its own decimal point and decimal limit
+        assert_eq!(
+            type_keys(&["1", ".", "5", "+", "2", ".", "2", "5", "9"]),
+            "1.5+2.25"
+        );
+        assert_eq!(type_keys(&["1", "+", "0", "0", "7"]), "1+7");
+        assert_eq!(type_keys(&["1", "+", ".", "5"]), "1+0.5");
+        // = works the sum out; a plain number is left alone; an invalid sum too
+        assert_eq!(
+            type_keys(&["1", "2", ".", "5", "×", "3", "+", "4", "="]),
+            "41.50"
+        );
+        assert_eq!(type_keys(&["7", "="]), "7");
+        assert_eq!(type_keys(&["5", "÷", "0", "="]), "5÷0");
+        assert_eq!(type_keys(&["5", "−", "9", "="]), "5−9");
+        assert_eq!(type_keys(&["1", "2", "+", "3", "<", "<"]), "12");
+        assert_eq!(super::manage::calc_preview("12.5×3+4"), "41.50");
+        assert_eq!(super::manage::calc_preview("12.5"), "");
+        assert_eq!(super::manage::calc_preview("5÷0"), "—");
+    }
+
+    #[test]
+    fn pin_pad_rules() {
+        use super::manage::pin_key;
+        assert_eq!(pin_key("12", "3"), "123");
+        assert_eq!(pin_key("123", "<"), "12");
+        assert_eq!(pin_key("", "<"), "");
+        assert_eq!(pin_key("12345678", "9"), "12345678");
+        assert_eq!(pin_key("1", "x"), "1");
+    }
+
+    #[test]
+    fn calendar_covers_every_day_once() {
+        use super::manage::month_grid;
+        for offset in [-14, -1, 0, 1, 7] {
+            for sunday_first in [true, false] {
+                let cells = month_grid(offset, sunday_first);
+                assert_eq!(cells.len() % 7, 0);
+                let days: Vec<i32> = cells.iter().map(|c| c.day).filter(|d| *d > 0).collect();
+                let expected: Vec<i32> = (1..=days.len() as i32).collect();
+                assert_eq!(days, expected);
+                assert!((28..=31).contains(&days.len()));
+                // days ago fall by one with each day
+                let ago: Vec<i32> = cells
+                    .iter()
+                    .filter(|c| c.day > 0)
+                    .map(|c| c.days_ago)
+                    .collect();
+                assert!(ago.windows(2).all(|w| w[0] - w[1] == 1));
+            }
+        }
+        assert_eq!(month_grid(0, true).iter().filter(|c| c.today).count(), 1);
     }
 
     #[test]

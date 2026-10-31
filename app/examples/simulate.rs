@@ -663,8 +663,17 @@ fn money_text(m: Money) -> String {
     }
 }
 
+/// An amount the app parsed, in hundredths (the shadow ledger's unit).
+fn to_cents(m: Money) -> Money {
+    Money(m.0 * 100 / Money::minor_per_major())
+}
+
+/// What the screen shows, back in hundredths (the shadow ledger's unit):
+/// a three-decimal currency such as KWD stores tenths of a hundredth more.
 fn parse_shown(s: &str) -> Option<Money> {
-    Money::parse(&s.replace('−', "-").replace('+', "")).ok()
+    Money::parse(&s.replace('−', "-").replace('+', ""))
+        .ok()
+        .map(to_cents)
 }
 
 struct Event {
@@ -853,7 +862,7 @@ fn simulate_user(
                 let opening_m = if opening.is_empty() {
                     Money::ZERO
                 } else {
-                    Money::parse(opening).unwrap()
+                    to_cents(Money::parse(opening).unwrap())
                 };
                 shadow.insert(name.to_string(), opening_m);
                 d.rep.use_feature("add account");
@@ -919,7 +928,7 @@ fn simulate_user(
                     }
                     used_suggestion = true;
                     d.rep.entries_via_suggestion += 1;
-                    typed = Money::parse(&sg.amount).unwrap_or_default();
+                    typed = to_cents(Money::parse(&sg.amount).unwrap_or_default());
                     if typed != e.amount {
                         d.rep.suggestion_amount_retyped += 1;
                         d.clear_amount(sg.amount.len());
@@ -940,7 +949,7 @@ fn simulate_user(
                     text.insert(0, char::from(b'1' + rng.next(9) as u8));
                 }
                 d.type_amount(&text);
-                typed = Money::parse(&text).unwrap();
+                typed = to_cents(Money::parse(&text).unwrap());
                 if typo {
                     if roll(rng, 0.5) {
                         // noticed before saving
@@ -1279,21 +1288,16 @@ fn simulate_user(
             if d.tap("Set budgets") {
                 let rows = d.ui.get_budget_rows();
                 let idx = rng.next(rows.row_count().max(1) as u64) as usize;
-                let label = if rows
-                    .row_data(idx)
-                    .map(|r| r.limit.is_empty())
-                    .unwrap_or(true)
-                {
-                    "Set"
-                } else {
-                    "Edit"
-                };
-                let nth = rows
-                    .iter()
-                    .take(idx)
-                    .filter(|r| (r.limit.is_empty()) == (label == "Set"))
-                    .count();
-                if d.tap_nth(label, nth) {
+                let row = rows.row_data(idx);
+                let has_limit = row.as_ref().is_some_and(|r| !r.limit.is_empty());
+                let name = row.map(|r| r.name.to_string()).unwrap_or_default();
+                // the button names its category (Slint only builds the rows in view)
+                let label = format!(
+                    "{} budget for {name}",
+                    if has_limit { "Edit" } else { "Set" }
+                );
+                let nth = 0;
+                if d.tap_nth(&label, nth) {
                     let limit = if roll(rng, 0.1) {
                         "abc".to_string()
                     } else {
@@ -1470,6 +1474,10 @@ fn simulate_user(
             }
         }
         drop(store);
+        // close the window for good: a window left open keeps its timers
+        // running, and they would change the currency's decimals for the
+        // next person
+        d.ui.hide().ok();
         drop(d);
     }
     rep.per_persona.entry(p.name).or_default().0 += persona_entries;

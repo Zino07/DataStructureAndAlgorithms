@@ -63,3 +63,37 @@ clearing too few digits when editing). They looked like app bugs and were not.
    range" or round-number nudges instead.
 4. **Reminder to log** in the evening (needs the notification permission; deliberately not added yet).
 5. Arabic UI with right-to-left layout; multiple currencies; savings goals; widget.
+
+
+---
+
+## Round 5: after "your data, your rules" (31 Oct 2026)
+
+The same 100 people × 5 sessions, against the app with editable accounts and categories, planned and
+repeating entries, the calculator keypad and three-decimal currencies.
+
+* **0 unexpected problems over 500 sessions** (3,931 entries, 51,209 taps).
+* Tap to updated screen: p50 0.4 ms, p95 4.1 ms, max 23 ms. Opening the app: p50 5.8 ms.
+* **Memory is flat: 17 MB after the first person, 19 MB after the hundredth.**
+
+What the first runs of this round found, and what it turned out to be:
+
+1. **"Two budget saves fail" (open item since round 4): solved.** Slint only builds the rows you can see, so
+   "tap the 10th *Set* button" was not the 10th category once the page had scrolled; the limit landed on the
+   row below. Not an app bug, but a real accessibility flaw: every budget button was called just "Set". Each
+   now says its category ("Set budget for Family"), for the harness and for a screen reader.
+2. **"Memory rises to 354–460 MB and one tap takes 2.7 s" (open item): solved.** The harness left every
+   finished session's window open; its timers kept running. Closing the window at the end of a session
+   removes both. The memory curve is now flat, so the earlier "may be a leak" doubt is answered:
+   it was the harness, not the app.
+3. **The Kuwaiti persona now has three decimals**, and the harness's ledger had assumed hundredths: it
+   reported 200 false mismatches until it was taught to convert. Three-decimal behaviour itself is
+   covered by `crates/core/tests/decimals.rs` and `app/tests/currency_ui.rs`.
+
+The "Choose a category" failures from round 4 (open item 1) did not recur in this round.
+
+New screens are tested separately, by tapping through them: `app/tests/manage_ui.rs` (categories,
+accounts, calendar and calculator, planned entries, transfers, repeating entries, PIN lock, backup,
+restore, erase, sample data, payday on the 31st).
+
+Still open: nothing here has run on a real phone; no TalkBack, landscape or Arabic testing.

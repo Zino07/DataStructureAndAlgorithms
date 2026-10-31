@@ -112,6 +112,102 @@ pub struct Category {
     pub icon: String,
 }
 
+/// A category as the manager screen shows it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CategoryInfo {
+    pub category: Category,
+    /// Hidden categories keep their history but cannot be picked for new entries.
+    pub hidden: bool,
+    /// Income that counts as paid working time ("Earned per hour").
+    pub work: bool,
+    /// Entries (any date) filed under this category.
+    pub uses: i64,
+    pub has_budget: bool,
+}
+
+/// How often a repeating entry comes back.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Repeat {
+    Daily,
+    Weekly,
+    Monthly,
+    Yearly,
+}
+
+impl Repeat {
+    pub const ALL: [Repeat; 4] = [
+        Repeat::Daily,
+        Repeat::Weekly,
+        Repeat::Monthly,
+        Repeat::Yearly,
+    ];
+
+    pub fn to_db(self) -> i64 {
+        match self {
+            Repeat::Daily => 3,
+            Repeat::Weekly => 0,
+            Repeat::Monthly => 1,
+            Repeat::Yearly => 2,
+        }
+    }
+
+    pub fn from_db(v: i64) -> Repeat {
+        match v {
+            3 => Repeat::Daily,
+            0 => Repeat::Weekly,
+            2 => Repeat::Yearly,
+            _ => Repeat::Monthly,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Repeat::Daily => "Every day",
+            Repeat::Weekly => "Every week",
+            Repeat::Monthly => "Every month",
+            Repeat::Yearly => "Every year",
+        }
+    }
+}
+
+/// A repeating entry (salary, rent, a subscription).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewRecurring {
+    pub account_id: Id,
+    pub category_id: Id,
+    pub kind: Kind,
+    pub amount: Money,
+    pub minute: u16,
+    pub note: String,
+    pub repeat: Repeat,
+    /// First date it should be created.
+    pub first_date: NaiveDate,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Recurring {
+    pub id: Id,
+    pub account_name: String,
+    pub category_name: String,
+    pub category_icon: String,
+    pub kind: Kind,
+    pub amount: Money,
+    pub minute: u16,
+    pub note: String,
+    pub repeat: Repeat,
+    pub next_date: NaiveDate,
+    pub active: bool,
+}
+
+/// What happens to an account's entries when the account is deleted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Fate {
+    /// Entries and transfers move to this account first.
+    MoveTo(Id),
+    /// Entries and transfers are deleted with the account.
+    DeleteAll,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NewTransaction {
     pub account_id: Id,
@@ -221,8 +317,11 @@ pub struct CategoryTotal {
 pub struct Settings {
     /// ISO 4217 code shown next to amounts.
     pub currency: String,
-    /// Day of the month the budgeting cycle starts on (payday), 1..=28.
+    /// Day of the month the budgeting cycle starts on (payday), 1..=31.
+    /// In months with fewer days the cycle starts on the last day.
     pub cycle_start_day: u32,
+    /// Paid hours in a working day, for "earned per hour" (1..=16).
+    pub work_hours: u32,
     /// Bento Neo palette: 0 lime, 1 solar, 2 ember, 3 lilac.
     pub palette: u32,
     pub dark: bool,
@@ -240,6 +339,7 @@ impl Default for Settings {
         Settings {
             currency: "SAR".into(),
             cycle_start_day: 1,
+            work_hours: 8,
             palette: 0,
             dark: true,
             weekend: Weekend::FriSat,

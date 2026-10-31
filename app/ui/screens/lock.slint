@@ -1,0 +1,153 @@
+import { Theme, Type, Icons, Motion } from "../theme.slint";
+import { Icon, PillButton, ButtonStyle, Caption } from "../components/bento.slint";
+
+component PinKey inherits Rectangle {
+    in property <string> text;
+    in property <string> icon;
+    in property <string> label: root.text;
+    callback pressed;
+    accessible-role: button;
+    accessible-label: root.label;
+    accessible-action-default => { root.pressed(); }
+    height: 60px;
+    border-radius: self.height / 2;
+    background: ta.pressed ? Theme.c.surface-muted : Theme.c.surface;
+    animate background { duration: 90ms; }
+    transform-scale: ta.pressed ? 0.95 : 1;
+    animate transform-scale { duration: Motion.press; easing: spring(0.2); }
+    if root.icon == "": Text { text: root.text; font-size: 24px; font-weight: 500; color: Theme.c.ink; }
+    if root.icon != "": Icon { data: root.icon; size: 24px; }
+    ta := TouchArea { clicked => { root.pressed(); } }
+}
+
+// Covers the app until the right PIN is typed.
+export component LockScreen inherits Rectangle {
+    in property <length> top-inset;
+    in property <length> bottom-inset;
+    in property <string> message;
+    // returns "" when unlocked, otherwise what to tell the user
+    callback submit(string) -> string;
+    callback forgot();
+    pure callback edit(string /* current */, string /* key */) -> string;
+    in-out property <string> pin;
+    in-out property <string> note;
+    property <bool> confirm-erase: false;
+
+    background: Theme.glass ? #050607 : Theme.c.canvas;
+    // swallow every tap so nothing underneath can be reached
+    TouchArea { }
+
+    function press(k: string) {
+        root.note = "";
+        root.pin = root.edit(root.pin, k);
+    }
+
+    function enter() {
+        if root.pin.character-count < 4 {
+            root.note = "A PIN has 4 to 8 digits";
+            return;
+        }
+        root.note = root.submit(root.pin);
+        root.pin = "";
+    }
+
+    VerticalLayout {
+        padding-top: root.top-inset + 48px;
+        padding-bottom: root.bottom-inset + 24px;
+        padding-left: Theme.margin;
+        padding-right: Theme.margin;
+        spacing: Theme.space-5;
+        alignment: start;
+
+        Icon { data: Icons.radar; size: 40px; stroke: Theme.c.accent-ink; }
+        Text {
+            text: "Income Radar is locked";
+            font-size: Type.h2;
+            font-weight: 600;
+            color: Theme.c.ink;
+            horizontal-alignment: center;
+        }
+        // one dot per typed digit
+        HorizontalLayout {
+            alignment: center;
+            spacing: 12px;
+            height: 20px;
+            for i in 8: Rectangle {
+                visible: i < max(4, root.pin.character-count);
+                width: i < max(4, root.pin.character-count) ? 14px : 0px;
+                height: 14px;
+                y: 3px;
+                border-radius: 7px;
+                background: i < root.pin.character-count ? Theme.c.accent : transparent;
+                border-width: 2px;
+                border-color: i < root.pin.character-count ? Theme.c.accent : Theme.c.ink-muted;
+            }
+        }
+        Text {
+            text: root.note != "" ? root.note : root.message;
+            font-size: Type.label;
+            font-weight: 600;
+            color: root.note != "" ? Theme.c.negative : Theme.c.ink-muted;
+            horizontal-alignment: center;
+            wrap: word-wrap;
+            min-height: 36px;
+        }
+        GridLayout {
+            spacing: Theme.space-3;
+            Row {
+                PinKey { text: "1"; pressed => { root.press("1"); } }
+                PinKey { text: "2"; pressed => { root.press("2"); } }
+                PinKey { text: "3"; pressed => { root.press("3"); } }
+            }
+            Row {
+                PinKey { text: "4"; pressed => { root.press("4"); } }
+                PinKey { text: "5"; pressed => { root.press("5"); } }
+                PinKey { text: "6"; pressed => { root.press("6"); } }
+            }
+            Row {
+                PinKey { text: "7"; pressed => { root.press("7"); } }
+                PinKey { text: "8"; pressed => { root.press("8"); } }
+                PinKey { text: "9"; pressed => { root.press("9"); } }
+            }
+            Row {
+                PinKey { icon: Icons.backspace; label: "Delete digit"; pressed => { root.press("<"); } }
+                PinKey { text: "0"; pressed => { root.press("0"); } }
+                PinKey { icon: Icons.check; label: "Unlock"; pressed => { root.enter(); } }
+            }
+        }
+        if !root.confirm-erase: HorizontalLayout {
+            alignment: center;
+            PillButton {
+                text: "Forgot PIN?";
+                kind: ButtonStyle.ghost;
+                small: true;
+                clicked => { root.confirm-erase = true; }
+            }
+        }
+        if root.confirm-erase: VerticalLayout {
+            spacing: Theme.space-2;
+            Text {
+                text: "The PIN cannot be recovered. You can erase everything on this phone and start over (back up first if you can).";
+                font-size: Type.label;
+                color: Theme.c.ink-muted;
+                wrap: word-wrap;
+                horizontal-alignment: center;
+            }
+            HorizontalLayout {
+                spacing: Theme.space-2;
+                PillButton {
+                    text: "Cancel";
+                    kind: ButtonStyle.ghost;
+                    clicked => { root.confirm-erase = false; }
+                }
+                PillButton {
+                    horizontal-stretch: 1;
+                    text: "Erase everything";
+                    icon: Icons.trash;
+                    kind: ButtonStyle.danger;
+                    clicked => { root.confirm-erase = false; root.forgot(); }
+                }
+            }
+        }
+    }
+}

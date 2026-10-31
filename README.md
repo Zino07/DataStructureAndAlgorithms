@@ -6,7 +6,8 @@ A lightweight personal-finance app for Android, written in Rust.
 * **Storage:** SQLite (bundled through `rusqlite`), stored on the device only
 * **Design:** Bento Neo design system: 8 themes (Lime, Solar, Ember, Lilac × light/dark) plus the
   **Aurora Glass** style (frosted panels over a soft aurora, a little glow), Manrope font
-* **APK size:** about 8 MB (single arm64 `.so`, release profile with LTO and `opt-level = "s"`)
+* **APK:** arm64-v8a (phones) and x86_64 (emulators, Chromebooks); 32-bit ARM phones are not supported,
+  because the graphics library (Skia) has no prebuilt binary for it (release profile, LTO, `opt-level = "s"`)
 
 | Home | Stats | New entry | Activity | Budgets | Light |
 |---|---|---|---|---|---|
@@ -17,6 +18,12 @@ A lightweight personal-finance app for Android, written in Rust.
 | Home | Stats | New entry | Activity | Budgets | Settings |
 |---|---|---|---|---|---|
 | ![](docs/screenshots/glass-home-lime.png) | ![](docs/screenshots/glass-stats-lime.png) | ![](docs/screenshots/glass-add-lime.png) | ![](docs/screenshots/glass-activity-lime.png) | ![](docs/screenshots/glass-budgets-ember.png) | ![](docs/screenshots/glass-settings-lime.png) |
+
+**Yours to change**
+
+| Categories | Categories (glass) | Settings: lock and data | Repeating entries |
+|---|---|---|---|
+| ![](docs/screenshots/categories-lime-dark.png) | ![](docs/screenshots/glass-categories-lime.png) | ![](docs/screenshots/settings-lime-dark-3.png) | ![](docs/screenshots/repeats-lime-dark.png) |
 
 ## What it does
 
@@ -34,8 +41,20 @@ A lightweight personal-finance app for Android, written in Rust.
   category grid (every category one tap away); account chips; day and time to the minute with
   quick chips (1 h ago, 3 h ago, this morning, last night); the Save button stays pinned above
   the keyboard / navigation bar.
-* **Edit, delete, undo, search,** transfers between accounts, **category budgets** with warnings.
-* **Payday cycles:** the budget month starts on your payday (day 1–28).
+* **Everything is yours to change:** edit or delete any entry or transfer (with undo); rename an
+  account, fix its opening balance, or delete it (move its entries to another account, or take them
+  along); add, rename, re-icon, reorder, hide and delete **categories**; delete the sample data
+  alone, or erase everything and start fresh. See [`docs/AUDIT_RESPONSE.md`](docs/AUDIT_RESPONSE.md).
+* **Search** covers entries *and* transfers; **category budgets** with warnings.
+* **Entry the way you think:** a keypad that does sums (`12.5 × 3 + 4`), a **calendar** for any day,
+  **planned** entries in the future (they count when their day comes), and **repeating** entries
+  (daily, weekly, monthly, yearly) for salary, rent and subscriptions.
+* **Payday cycles:** the budget month starts on your payday (day 1–31; 29–31 mean the last day of
+  shorter months).
+* **Currencies with the right decimals:** KWD, BHD, OMR, JOD, TND, IQD have three, JPY none, the
+  rest two. Switching keeps every amount's value.
+* **Keep it safe:** optional **PIN lock**, **backup / restore** of the whole database, **CSV export**.
+  The database itself is not encrypted.
 * **Accounts:** balances are calculated from the ledger (opening + entries + transfers), never stored.
 * **Money as integers:** amounts are stored in minor units (`i64`). Input accepts Arabic-Indic digits.
 * **Private:** no account, no network permission, no ads.
@@ -70,7 +89,10 @@ app/           Slint UI and the Android / desktop entry points
   ui/theme.slint            Bento Neo tokens (all 8 themes, spacing, radii, type scale, icons)
   ui/components/bento.slint Tile, NotchCard, PillButton, IconButton, Chip, Badge, Progress,
                             Bars, DotMatrix, ListRow, PillNav, Dock (glass), Toast, Field
-  ui/screens/               home, activity, stats, add, accounts, budgets, settings
+  ui/screens/               home, activity, stats, add, accounts, budgets, settings,
+                            categories, repeats, lock
+  src/manage.rs             what the user can change or remove: accounts, categories, repeats,
+                            PIN, backup, export, erase
   examples/simulate.rs      100 people × 5 sessions through the real UI
   src/lib.rs                UI ↔ store glue, `android_main`
   src/main.rs               desktop window and `--screenshots` mode
@@ -122,8 +144,8 @@ cargo apk build -p income-radar --lib --release
 
 ## Roadmap
 
-* Recurring entries and subscription reminders
-* Export and backup (CSV / encrypted file)
+* Share sheet / "save to Downloads" for backups, JSON export, fingerprint unlock, an encrypted database
+* Subcategories and tags, a currency per account
 * Arabic UI with right-to-left layout (needs an Arabic font paired with Manrope)
 * Savings goals, home-screen widget for quick entry
 * Check on a real device: the app was built and verified on desktop and by simulation only

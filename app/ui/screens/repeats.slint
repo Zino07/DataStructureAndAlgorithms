@@ -1,0 +1,71 @@
+import { Theme, Type, Icons } from "../theme.slint";
+import { Tile, TileStyle, Caption, PageTitle, ListRow, IconButton, IconButtonStyle, PillButton, ButtonStyle,
+         CardHeader } from "../components/bento.slint";
+import { RepeatRow } from "../data.slint";
+
+export component RepeatsScreen inherits VerticalLayout {
+    in property <[RepeatRow]> rows;
+    callback close();
+    callback toggle(int, bool);
+    callback remove(int);
+    in-out property <int> selected: -1;
+
+    spacing: Theme.gap;
+
+    HorizontalLayout {
+        spacing: Theme.space-3;
+        IconButton { icon: Icons.back; label: "Back"; clicked => { root.close(); } }
+        Rectangle { horizontal-stretch: 1; }
+    }
+
+    PageTitle { first: "Repeating"; second: "Entries"; }
+
+    Tile {
+        inner-spacing: Theme.space-1;
+        pad: Theme.space-5;
+        order: 0;
+        CardHeader { title: "Salary, rent, subscriptions"; }
+        if root.rows.length == 0: Text {
+            text: "Nothing repeats yet. When you add an entry, choose Repeat (daily, weekly, monthly or yearly) and it will be created for you on time.";
+            font-size: Type.label + 1px;
+            color: Theme.c.ink-muted;
+            wrap: word-wrap;
+        }
+        for r in root.rows: VerticalLayout {
+            spacing: 0px;
+            ListRow {
+                icon: r.icon;
+                title: r.title;
+                meta: r.meta;
+                value: r.amount;
+                positive: r.income;
+                selected: root.selected == r.id;
+                clicked => { root.selected = root.selected == r.id ? -1 : r.id; }
+            }
+            if root.selected == r.id: HorizontalLayout {
+                spacing: Theme.space-2;
+                padding-bottom: Theme.space-2;
+                PillButton {
+                    horizontal-stretch: 1;
+                    text: r.active ? "Pause" : "Resume";
+                    kind: ButtonStyle.ghost;
+                    small: true;
+                    on: TileStyle.surface;
+                    clicked => { root.toggle(r.id, !r.active); root.selected = -1; }
+                }
+                PillButton {
+                    horizontal-stretch: 1;
+                    text: "Delete";
+                    icon: Icons.trash;
+                    small: true;
+                    kind: ButtonStyle.danger;
+                    clicked => { root.remove(r.id); root.selected = -1; }
+                }
+            }
+        }
+        Caption {
+            text: "Deleting one stops future copies. Entries already created stay in Activity.";
+            wrap: word-wrap;
+        }
+    }
+}

@@ -141,6 +141,13 @@ mod screenshots {
         glass("glass-accounts-lime", Screen::Accounts, false, 0, 0.0),
         glass("glass-budgets-ember", Screen::Budgets, false, 2, 0.0),
         glass("glass-settings-lime", Screen::Settings, false, 0, 0.0),
+        shot("settings-lime-dark-2", Screen::Settings, 0, true, 1500.0),
+        shot("settings-lime-dark-3", Screen::Settings, 0, true, 2500.0),
+        glass("glass-settings-lime-2", Screen::Settings, false, 0, 2500.0),
+        shot("categories-lime-dark", Screen::Categories, 0, true, 0.0),
+        shot("categories-lime-light", Screen::Categories, 0, false, 0.0),
+        glass("glass-categories-lime", Screen::Categories, false, 0, 0.0),
+        shot("repeats-lime-dark", Screen::Repeats, 0, true, 0.0),
     ];
 
     pub fn run(out: &Path) -> Result<(), Box<dyn Error>> {

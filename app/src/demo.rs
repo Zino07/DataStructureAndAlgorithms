@@ -21,7 +21,17 @@ impl Lcg {
 
 /// Fills two budget cycles ending at `today` with plausible entries.
 pub fn seed(store: &Store, today: NaiveDate) -> Result<(), StoreError> {
+    // everything created below is flagged, so "Remove sample data" can take
+    // exactly it out again and leave the user's own entries alone
+    let baseline = store.demo_baseline()?;
+    seed_inner(store, today)?;
+    store.mark_demo(baseline)
+}
+
+fn seed_inner(store: &Store, today: NaiveDate) -> Result<(), StoreError> {
     let settings = store.settings()?;
+    // the figures below are in hundredths; scale them to the currency's decimals
+    let scale = |minor: i64| minor * Money::minor_per_major() / 100;
     let cash = match store.accounts_with_balances()?.first() {
         Some(a) => a.account.id,
         None => store.add_account("Cash", AccountKind::Cash, Money(0))?,
@@ -33,7 +43,7 @@ pub fn seed(store: &Store, today: NaiveDate) -> Result<(), StoreError> {
             .find(|a| a.account.name == name)
         {
             Some(a) => Ok(a.account.id),
-            None => store.add_account(name, kind, Money(opening)),
+            None => store.add_account(name, kind, Money(scale(opening))),
         }
     };
     let bank = find_or_add("Main bank", AccountKind::Bank, 420_000)?;
@@ -58,7 +68,7 @@ pub fn seed(store: &Store, today: NaiveDate) -> Result<(), StoreError> {
             account_id: account,
             category_id: find(kind, cat)?,
             kind,
-            amount: Money(minor),
+            amount: Money(scale(minor).max(1)),
             date,
             minute,
             note: note.into(),
@@ -116,7 +126,7 @@ pub fn seed(store: &Store, today: NaiveDate) -> Result<(), StoreError> {
             store.add_transfer(&NewTransfer {
                 from_account: from,
                 to_account: to,
-                amount: Money(amount),
+                amount: Money(scale(amount)),
                 date: period.start + chrono::Days::new(1),
                 minute,
                 note: note.into(),
@@ -126,7 +136,7 @@ pub fn seed(store: &Store, today: NaiveDate) -> Result<(), StoreError> {
         let last = if period.contains(today) {
             today
         } else {
-            period.end.pred_opt().unwrap()
+            period.end.pred_opt().unwrap_or(period.end)
         };
         for day in period.start.iter_days().take_while(|d| *d <= last) {
             if rng.next(10) < 8 {

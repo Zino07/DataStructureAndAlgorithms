@@ -28,6 +28,8 @@ component BudgetItem inherits VerticalLayout {
         }
         PillButton {
             text: root.open ? "Close" : root.item.limit == "" ? "Set" : "Edit";
+            // "Set" alone is the same for every category: say which one
+            accessible-label: (root.open ? "Close " : root.item.limit == "" ? "Set budget for " : "Edit budget for ") + root.item.name;
             small: true;
             kind: ButtonStyle.ghost;
             y: (parent.height - self.height) / 2;

@@ -31,7 +31,7 @@ slint-build = "1.18"
 [package.metadata.android]
 package = "app.incomeradar"
 apk_name = "income-radar"
-build_targets = ["aarch64-linux-android"]
+build_targets = ["aarch64-linux-android", "x86_64-linux-android"]
 resources = "android/res"
 
 [package.metadata.android.sdk]
