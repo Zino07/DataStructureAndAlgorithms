@@ -47,61 +47,43 @@ mod screenshots {
         scroll: f32,
     }
 
+    const fn shot(
+        name: &'static str,
+        screen: Screen,
+        palette: i32,
+        dark: bool,
+        scroll: f32,
+    ) -> Shot {
+        Shot {
+            name,
+            screen,
+            adding: false,
+            palette,
+            dark,
+            scroll,
+        }
+    }
+
     const SHOTS: &[Shot] = &[
+        shot("home-empty-lime-dark", Screen::Home, 0, true, 0.0),
+        shot("home-lime-dark", Screen::Home, 0, true, 0.0),
+        shot("home-lime-dark-2", Screen::Home, 0, true, 760.0),
+        shot("home-lime-light", Screen::Home, 0, false, 0.0),
+        shot("home-lilac-dark", Screen::Home, 3, true, 0.0),
+        shot("home-ember-light", Screen::Home, 2, false, 0.0),
+        shot("home-solar-dark", Screen::Home, 1, true, 0.0),
+        shot("stats-lime-dark", Screen::Stats, 0, true, 0.0),
+        shot("stats-lime-dark-2", Screen::Stats, 0, true, 700.0),
+        shot("stats-lime-dark-3", Screen::Stats, 0, true, 1400.0),
+        shot("stats-lime-dark-4", Screen::Stats, 0, true, 2100.0),
+        shot("stats-lime-light", Screen::Stats, 0, false, 0.0),
+        shot("activity-lime-dark", Screen::Activity, 0, true, 0.0),
         Shot {
-            name: "home-lime-light",
+            name: "add-lime-dark",
             screen: Screen::Home,
-            adding: false,
-            palette: 0,
-            dark: false,
-            scroll: 0.0,
-        },
-        Shot {
-            name: "home-lime-light-2",
-            screen: Screen::Home,
-            adding: false,
-            palette: 0,
-            dark: false,
-            scroll: 700.0,
-        },
-        Shot {
-            name: "home-lime-dark",
-            screen: Screen::Home,
-            adding: false,
+            adding: true,
             palette: 0,
             dark: true,
-            scroll: 0.0,
-        },
-        Shot {
-            name: "home-ember-dark",
-            screen: Screen::Home,
-            adding: false,
-            palette: 2,
-            dark: true,
-            scroll: 0.0,
-        },
-        Shot {
-            name: "home-solar-light",
-            screen: Screen::Home,
-            adding: false,
-            palette: 1,
-            dark: false,
-            scroll: 0.0,
-        },
-        Shot {
-            name: "home-lilac-light",
-            screen: Screen::Home,
-            adding: false,
-            palette: 3,
-            dark: false,
-            scroll: 0.0,
-        },
-        Shot {
-            name: "activity-lime-light",
-            screen: Screen::Activity,
-            adding: false,
-            palette: 0,
-            dark: false,
             scroll: 0.0,
         },
         Shot {
@@ -112,30 +94,9 @@ mod screenshots {
             dark: false,
             scroll: 0.0,
         },
-        Shot {
-            name: "add-lime-dark",
-            screen: Screen::Home,
-            adding: true,
-            palette: 0,
-            dark: true,
-            scroll: 0.0,
-        },
-        Shot {
-            name: "accounts-lime-light",
-            screen: Screen::Accounts,
-            adding: false,
-            palette: 0,
-            dark: false,
-            scroll: 0.0,
-        },
-        Shot {
-            name: "settings-lime-light",
-            screen: Screen::Settings,
-            adding: false,
-            palette: 0,
-            dark: false,
-            scroll: 0.0,
-        },
+        shot("accounts-lime-dark", Screen::Accounts, 0, true, 0.0),
+        shot("budgets-lime-dark", Screen::Budgets, 0, true, 0.0),
+        shot("settings-lime-dark", Screen::Settings, 0, true, 0.0),
     ];
 
     pub fn run(out: &Path) -> Result<(), Box<dyn Error>> {
@@ -143,7 +104,6 @@ mod screenshots {
         let data = std::env::temp_dir().join(format!("income-radar-shots-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&data);
         let ui = income_radar::build(&data)?;
-        ui.invoke_load_demo();
 
         let step = Rc::new(RefCell::new(0usize));
         let out: PathBuf = out.to_path_buf();
@@ -178,13 +138,14 @@ mod screenshots {
     }
 
     fn apply(ui: &AppWindow, shot: &Shot) {
+        if !shot.name.contains("empty") && ui.get_can_load_demo() {
+            ui.invoke_load_demo();
+        }
         ui.invoke_palette_changed(shot.palette);
         ui.invoke_dark_changed(shot.dark);
-        ui.set_screen(shot.screen);
+        ui.invoke_go(shot.screen);
         if shot.adding {
             ui.invoke_open_add();
-        } else {
-            ui.set_adding(false);
         }
         ui.invoke_scroll_to(shot.scroll);
     }

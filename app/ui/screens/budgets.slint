@@ -1,0 +1,99 @@
+import { Theme, Type, Icons } from "../theme.slint";
+import { Tile, TileStyle, Caption, CardTitle, IconButton, Icon, Progress, Field, PillButton, ButtonStyle } from "../components/bento.slint";
+import { BudgetRow } from "../data.slint";
+
+component BudgetItem inherits VerticalLayout {
+    in property <BudgetRow> item;
+    in property <string> currency;
+    callback save(int, string) -> string;
+    property <string> draft: item.limit;
+    property <string> error;
+    property <bool> open: false;
+    spacing: Theme.space-2;
+    HorizontalLayout {
+        spacing: Theme.space-3;
+        Rectangle {
+            width: 40px;
+            height: 40px;
+            border-radius: 20px;
+            background: Theme.c.surface-muted;
+            Icon { data: root.item.icon; }
+        }
+        VerticalLayout {
+            horizontal-stretch: 1;
+            alignment: center;
+            Text { text: root.item.name; font-size: Type.label + 1px; font-weight: 600; color: Theme.c.ink; }
+            Caption { text: root.item.limit == "" ? "No limit · spent " + root.item.spent : root.item.spent + " of " + root.item.limit + " " + root.currency; }
+        }
+        PillButton {
+            text: root.open ? "Close" : root.item.limit == "" ? "Set" : "Edit";
+            small: true;
+            kind: ButtonStyle.ghost;
+            y: (parent.height - self.height) / 2;
+            clicked => {
+                root.open = !root.open;
+                root.draft = root.item.limit;
+                root.error = "";
+            }
+        }
+    }
+    if root.item.limit != "": Progress { value: root.item.ratio; fill: root.item.over ? Theme.c.negative : Theme.c.accent; }
+    if root.open: HorizontalLayout {
+        spacing: Theme.space-2;
+        Field {
+            horizontal-stretch: 1;
+            placeholder: "Monthly limit, empty = none";
+            input-type: InputType.decimal;
+            text <=> root.draft;
+        }
+        PillButton {
+            text: "Save";
+            kind: ButtonStyle.accent;
+            y: parent.height - self.height;
+            clicked => {
+                root.error = root.save(root.item.id, root.draft);
+                if root.error == "" { root.open = false; }
+            }
+        }
+    }
+    if root.error != "": Text { text: root.error; font-size: Type.label; color: Theme.c.negative; }
+}
+
+export component BudgetsScreen inherits VerticalLayout {
+    in property <[BudgetRow]> rows;
+    in property <string> currency;
+    callback close();
+    callback save(int, string) -> string;
+    spacing: Theme.gap;
+
+    HorizontalLayout {
+        spacing: Theme.space-3;
+        IconButton { icon: Icons.back; label: "Back"; clicked => { root.close(); } }
+        Text {
+            text: "Budgets";
+            font-size: Type.h2;
+            font-weight: 600;
+            color: Theme.c.ink;
+            vertical-alignment: center;
+        }
+    }
+    Tile {
+        style: TileStyle.soft;
+        inner-spacing: Theme.space-2;
+        CardTitle { text: "A limit per category, per cycle"; }
+        Text {
+            text: "Home and Stats warn you at 80% and when a category goes over.";
+            wrap: word-wrap;
+            font-size: Type.label;
+            color: Theme.c.ink-muted;
+        }
+    }
+    Tile {
+        inner-spacing: Theme.space-5;
+        for row in root.rows: BudgetItem {
+            item: row;
+            currency: root.currency;
+            save(id, text) => { return root.save(id, text); }
+        }
+    }
+}

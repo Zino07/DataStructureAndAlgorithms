@@ -1,21 +1,34 @@
 import { Theme, Type, Icons } from "../theme.slint";
-import { Tile, TileStyle, PillNav, ListRow, Caption, Metric, PageTitle, IconButton, IconButtonStyle } from "../components/bento.slint";
+import { Tile, TileStyle, PillNav, ListRow, Caption, Amount, PageTitle, IconButton, IconButtonStyle,
+         Field } from "../components/bento.slint";
 import { Dashboard, TxRow } from "../data.slint";
 
 export component ActivityScreen inherits VerticalLayout {
     in property <Dashboard> dash;
     in property <[TxRow]> rows;
-    in-out property <int> filter: 0; // 0 all, 1 expenses, 2 income
-    in-out property <int> selected: -1;
+    in property <string> result-note;  // "84 entries · 2,140.00 spent"
+    in-out property <int> filter: 0;   // 0 all, 1 expenses, 2 income, 3 transfers
+    in-out property <string> query;
+    in-out property <int> selected: -1; // selected transfer id
     callback filter-changed(int);
-    callback delete(int);
+    callback query-changed(string);
+    callback edit(int);
+    callback delete-transfer(int);
 
     spacing: Theme.gap;
 
     PageTitle { first: "Your"; second: "Activity"; }
 
+    Field {
+        placeholder: "Search notes, categories, accounts";
+        icon: Icons.search;
+        on: TileStyle.muted;
+        text <=> root.query;
+        edited(t) => { root.query-changed(t); }
+    }
+
     PillNav {
-        items: ["All", "Expenses", "Income"];
+        items: ["All", "Spent", "Income", "Transfers"];
         current <=> root.filter;
         changed(i) => {
             root.selected = -1;
@@ -23,56 +36,71 @@ export component ActivityScreen inherits VerticalLayout {
         }
     }
 
-    Tile {
+    if root.filter != 3: Tile {
         style: TileStyle.inverse;
+        inner-spacing: Theme.space-3;
         Caption { text: root.dash.cycle; on: TileStyle.inverse; }
         HorizontalLayout {
             spacing: Theme.space-4;
             VerticalLayout {
                 horizontal-stretch: 1;
-                spacing: Theme.space-1;
-                Caption { text: "Income · " + root.dash.currency; on: TileStyle.inverse; }
-                Metric { text: root.dash.income; on: TileStyle.inverse; font-size: 28px; }
+                spacing: 2px;
+                Caption { text: "Income"; on: TileStyle.inverse; }
+                Amount { value: root.dash.income; size: Type.metric-sm + 4px; on: TileStyle.inverse; }
             }
             VerticalLayout {
                 horizontal-stretch: 1;
-                spacing: Theme.space-1;
-                Caption { text: "Spent · " + root.dash.currency; on: TileStyle.inverse; }
-                Metric { text: root.dash.expense; on: TileStyle.inverse; font-size: 28px; }
+                spacing: 2px;
+                Caption { text: "Spent"; on: TileStyle.inverse; }
+                Amount { value: root.dash.expense; size: Type.metric-sm + 4px; on: TileStyle.inverse; }
             }
         }
     }
 
     Tile {
-        inner-spacing: Theme.space-1;
+        inner-spacing: 2px;
         pad: Theme.space-5;
-        if root.rows.length == 0: Text {
-            text: "Nothing here yet.";
-            font-size: Type.body;
-            color: Theme.c.ink-muted;
+        if root.result-note != "": Caption { text: root.result-note; height: 20px; }
+        if root.rows.length == 0: VerticalLayout {
+            padding-top: Theme.space-4;
+            padding-bottom: Theme.space-4;
+            Text {
+                text: root.query != "" ? "No entries match “" + root.query + "”." : "Nothing here yet.";
+                font-size: Type.body;
+                color: Theme.c.ink-muted;
+                wrap: word-wrap;
+            }
         }
         for row in root.rows: VerticalLayout {
             if row.header: Caption {
                 text: row.title;
-                height: 32px;
+                height: 34px;
                 vertical-alignment: bottom;
+                font-weight: 600;
             }
             if !row.header: ListRow {
                 icon: row.icon;
                 title: row.title;
                 meta: row.meta;
-                value: root.selected == row.id ? "" : row.amount;
+                value: row.transfer && root.selected == row.id ? "" : row.amount;
+                value-meta: row.time;
                 positive: row.income;
-                selected: root.selected == row.id;
-                clicked => { root.selected = root.selected == row.id ? -1 : row.id; }
-                if root.selected == row.id: IconButton {
+                selected: row.transfer && root.selected == row.id;
+                clicked => {
+                    if row.transfer {
+                        root.selected = root.selected == row.id ? -1 : row.id;
+                    } else {
+                        root.edit(row.id);
+                    }
+                }
+                if row.transfer && root.selected == row.id: IconButton {
                     icon: Icons.trash;
                     small: true;
                     kind: IconButtonStyle.inverse;
+                    label: "Delete transfer";
                     y: (parent.height - self.height) / 2;
-                    accessible-label: "Delete entry";
                     clicked => {
-                        root.delete(row.id);
+                        root.delete-transfer(row.id);
                         root.selected = -1;
                     }
                 }

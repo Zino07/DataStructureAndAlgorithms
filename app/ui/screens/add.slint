@@ -1,18 +1,20 @@
 import { Theme, Type, Icons } from "../theme.slint";
-import { Tile, TileStyle, PillNav, Chip, ChipScroller, Caption, CardTitle, Metric, IconButton, IconButtonStyle,
+import { Tile, TileStyle, PillNav, Chip, ChipScroller, Caption, CardTitle, Amount, IconButton, IconButtonStyle,
          PillButton, ButtonStyle, Field, Icon } from "../components/bento.slint";
-import { CategoryItem, AccountItem } from "../data.slint";
+import { CategoryItem, AccountItem, SuggestionItem } from "../data.slint";
 
 component Key inherits Rectangle {
     in property <string> text;
     in property <string> icon;
+    in property <string> label: root.text;
     callback pressed;
     accessible-role: button;
-    accessible-label: root.text;
+    accessible-label: root.label;
+    accessible-action-default => { root.pressed(); }
     height: 52px;
     border-radius: self.height / 2;
     background: ta.pressed ? Theme.c.surface-muted : Theme.c.surface;
-    animate background { duration: 100ms; }
+    animate background { duration: 90ms; }
     if root.icon == "": Text {
         text: root.text;
         font-size: 22px;
@@ -28,36 +30,104 @@ export component AddScreen inherits VerticalLayout {
     in property <[CategoryItem]> expense-categories;
     in property <[CategoryItem]> income-categories;
     in property <[AccountItem]> accounts;
+    in property <[SuggestionItem]> expense-suggestions;
+    in property <[SuggestionItem]> income-suggestions;
+    in property <int> now-minute;
     in-out property <string> error;
     callback close();
     // returns "" on success, otherwise an error message
-    callback save(bool /* income */, string /* amount */, int /* category */, int /* account */,
-                  int /* days ago */, string /* note */) -> string;
+    callback save(int /* editing id, -1 new */, int /* kind 0/1/2 */, string /* amount */,
+                  int /* category */, int /* account */, int /* to account */,
+                  int /* days ago */, int /* minute, -1 now */, string /* note */) -> string;
+    callback delete(int);
+    // keypad editing lives in Rust (validation of decimals and length)
+    pure callback edit-amount(string /* current */, string /* key */) -> string;
+    pure callback day-label(int /* days ago */) -> string;
+    pure callback time-label(int /* minute */) -> string;
 
-    property <int> kind: 0; // 0 expense, 1 income
+    property <int> editing: -1;
+    property <int> kind: 0; // 0 expense, 1 income, 2 transfer
     property <string> amount: "";
     property <int> category: -1;
     property <int> account: root.accounts.length > 0 ? root.accounts[0].id : -1;
+    property <int> to-account: root.accounts.length > 1 ? root.accounts[1].id : -1;
     property <int> days-ago: 0;
+    property <int> minute: 0;
+    property <bool> custom-time: false;
     property <string> note;
-    property <[CategoryItem]> categories: kind == 0 ? expense-categories : income-categories;
+    property <[CategoryItem]> categories: kind == 1 ? income-categories : expense-categories;
+    property <[SuggestionItem]> suggestions: kind == 1 ? income-suggestions : kind == 0 ? expense-suggestions : [];
 
     public function reset() {
+        root.editing = -1;
         root.kind = 0;
         root.amount = "";
         root.category = -1;
         root.days-ago = 0;
+        root.minute = root.now-minute;
+        root.custom-time = false;
         root.note = "";
         root.error = "";
         root.account = root.accounts.length > 0 ? root.accounts[0].id : -1;
+        root.to-account = root.accounts.length > 1 ? root.accounts[1].id : -1;
     }
 
-    // Keypad editing lives in Rust (validation of decimals and length).
-    pure callback edit-amount(string /* current */, string /* key */) -> string;
+    public function start-transfer() {
+        root.reset();
+        root.kind = 2;
+    }
+
+    public function load(id: int, kind: int, amount: string, category: int, account: int,
+                         days-ago: int, minute: int, note: string) {
+        root.editing = id;
+        root.kind = kind;
+        root.amount = amount;
+        root.category = category;
+        root.account = account;
+        root.days-ago = days-ago;
+        root.minute = minute;
+        root.custom-time = true;
+        root.note = note;
+        root.error = "";
+    }
+
+    out property <string> save-label: root.editing >= 0 ? "Save changes" : root.kind == 2 ? "Move money" : "Save entry";
+
+    public function submit() {
+        root.error = root.save(root.editing, root.kind, root.amount, root.category, root.account,
+            root.to-account, root.days-ago, root.custom-time ? root.minute : -1, root.note);
+        if root.error == "" {
+            root.reset();
+            root.close();
+        }
+    }
 
     function press(key: string) {
         root.error = "";
         root.amount = root.edit-amount(root.amount, key);
+    }
+
+    function shift-time(delta: int) {
+        if !root.custom-time {
+            root.minute = root.now-minute;
+        }
+        root.custom-time = true;
+        root.minute = Math.mod(root.minute + delta + 1440, 1440);
+    }
+
+    // d > 0: minutes before now; -1: 08:00; -2: 21:00 (of the chosen day)
+    function quick-time(d: int) {
+        root.custom-time = true;
+        if d > 0 {
+            root.minute = Math.mod(root.now-minute - d + 1440, 1440);
+            if root.now-minute < d && root.days-ago == 0 {
+                root.days-ago = 1;
+            }
+        } else if d == -1 {
+            root.minute = 8 * 60;
+        } else {
+            root.minute = 21 * 60;
+        }
     }
 
     spacing: Theme.gap;
@@ -65,22 +135,30 @@ export component AddScreen inherits VerticalLayout {
     HorizontalLayout {
         spacing: Theme.space-3;
         IconButton {
-            icon: Icons.back;
-            accessible-label: "Back";
+            icon: Icons.close;
+            label: "Close";
             clicked => { root.close(); }
         }
         Text {
-            text: "New entry";
+            text: root.editing >= 0 ? "Edit entry" : root.kind == 2 ? "Move money" : "New entry";
             font-size: Type.h2;
             font-weight: 600;
             color: Theme.c.ink;
             vertical-alignment: center;
             horizontal-stretch: 1;
         }
+        if root.editing >= 0: IconButton {
+            icon: Icons.trash;
+            label: "Delete entry";
+            clicked => {
+                root.delete(root.editing);
+                root.close();
+            }
+        }
     }
 
     PillNav {
-        items: ["Expense", "Income"];
+        items: root.editing >= 0 ? ["Expense", "Income"] : ["Expense", "Income", "Transfer"];
         current <=> root.kind;
         changed => {
             root.category = -1;
@@ -91,31 +169,72 @@ export component AddScreen inherits VerticalLayout {
     Tile {
         style: TileStyle.inverse;
         inner-spacing: Theme.space-2;
-        Caption { text: (root.kind == 0 ? "Spent · " : "Received · ") + root.currency; on: TileStyle.inverse; }
-        Metric {
-            text: root.amount == "" ? "0" : root.amount;
-            large: true;
+        HorizontalLayout {
+            Caption {
+                text: root.kind == 0 ? "Spent" : root.kind == 1 ? "Received" : "Amount to move";
+                on: TileStyle.inverse;
+                horizontal-stretch: 1;
+            }
+            Caption {
+                text: root.day-label(root.days-ago) + " · " + root.time-label(root.custom-time ? root.minute : root.now-minute);
+                on: TileStyle.inverse;
+                horizontal-alignment: right;
+            }
+        }
+        Amount {
+            value: root.amount == "" ? "0" : root.amount;
+            unit: root.currency;
+            size: Type.metric-xl;
             on: TileStyle.inverse;
-            color: root.amount == "" ? Theme.c.ink-inverse.with-alpha(0.4) : Theme.c.ink-inverse;
+            color: root.amount == "" ? Theme.c.ink-inverse.with-alpha(0.35) : Theme.c.ink-inverse;
         }
         if root.error != "": HorizontalLayout {
-            spacing: Theme.space-1;
-            Icon { data: "M12 8v5M12 16h.01M12 3 2 20h20z"; stroke: Theme.c.negative; size: 14px; y: (parent.height - self.height) / 2; }
+            spacing: 6px;
+            Icon { data: Icons.alert; stroke: Theme.dark ? Theme.c.negative : #ff8a8a; size: 14px; y: (parent.height - self.height) / 2; }
             Text {
                 text: root.error;
                 font-size: Type.label;
+                font-weight: 600;
                 color: Theme.dark ? Theme.c.negative : #ff8a8a;
                 horizontal-stretch: 1;
                 vertical-alignment: center;
+                wrap: word-wrap;
             }
         }
     }
 
-    VerticalLayout {
+    if root.suggestions.length > 0 && root.editing < 0: VerticalLayout {
         spacing: Theme.space-2;
-        Caption { text: "Category"; }
+        HorizontalLayout {
+            spacing: 6px;
+            Icon { data: Icons.sparkle; size: 14px; stroke: Theme.c.ink-muted; y: (parent.height - self.height) / 2; }
+            Caption { text: "Usual at this time"; on: TileStyle.muted; }
+        }
         ChipScroller {
-            for cat in root.categories: Chip {
+            for s in root.suggestions: Chip {
+                text: s.title + " · " + s.amount-label;
+                icon: s.icon;
+                accent: root.amount == s.amount && root.category == s.category && root.note == s.note;
+                clicked => {
+                    root.amount = s.amount;
+                    root.category = s.category;
+                    root.account = s.account;
+                    root.note = s.note;
+                    root.error = "";
+                }
+            }
+        }
+    }
+
+    if root.kind != 2: VerticalLayout {
+        spacing: Theme.space-2;
+        Caption { text: "Category"; on: TileStyle.muted; }
+        // a grid, not a swipeable row: every category is one tap away
+        GridLayout {
+            spacing: Theme.space-2;
+            for cat[i] in root.categories: Chip {
+                row: floor(i / 3);
+                col: Math.mod(i, 3);
                 text: cat.name;
                 active: cat.id == root.category;
                 clicked => {
@@ -128,31 +247,88 @@ export component AddScreen inherits VerticalLayout {
 
     VerticalLayout {
         spacing: Theme.space-2;
-        Caption { text: "Account"; }
+        Caption { text: root.kind == 2 ? "From" : "Account"; on: TileStyle.muted; }
         ChipScroller {
             for acc in root.accounts: Chip {
                 text: acc.name;
+                icon: acc.icon;
                 active: acc.id == root.account;
                 clicked => { root.account = acc.id; }
             }
         }
     }
 
+    if root.kind == 2: VerticalLayout {
+        spacing: Theme.space-2;
+        Caption { text: "To"; on: TileStyle.muted; }
+        ChipScroller {
+            for acc in root.accounts: Chip {
+                text: acc.name;
+                icon: acc.icon;
+                active: acc.id == root.to-account;
+                clicked => { root.to-account = acc.id; }
+            }
+        }
+    }
+
     VerticalLayout {
         spacing: Theme.space-2;
-        Caption { text: "Date"; }
+        Caption { text: "When"; on: TileStyle.muted; }
         HorizontalLayout {
             spacing: Theme.space-2;
-            alignment: start;
-            Chip { text: "Today"; active: root.days-ago == 0; clicked => { root.days-ago = 0; } }
-            Chip { text: "Yesterday"; active: root.days-ago == 1; clicked => { root.days-ago = 1; } }
-            Chip { text: "2 days ago"; active: root.days-ago == 2; clicked => { root.days-ago = 2; } }
+            IconButton {
+                icon: Icons.back;
+                small: true;
+                label: "Earlier day";
+                enabled: root.days-ago < 365;
+                clicked => { root.days-ago += 1; }
+            }
+            Chip {
+                text: root.day-label(root.days-ago);
+                active: true;
+                clicked => { root.days-ago = 0; }
+            }
+            IconButton {
+                icon: Icons.back;
+                small: true;
+                label: "Later day";
+                enabled: root.days-ago > 0;
+                transform-rotation: 180deg;
+                clicked => { root.days-ago -= 1; }
+            }
+            Rectangle { horizontal-stretch: 1; }
+            IconButton {
+                icon: Icons.minus;
+                small: true;
+                label: "15 minutes earlier";
+                clicked => { root.shift-time(-15); }
+            }
+            Chip {
+                text: root.custom-time ? root.time-label(root.minute) : "Now";
+                clicked => {
+                    root.custom-time = false;
+                    root.minute = root.now-minute;
+                }
+            }
+            IconButton {
+                icon: Icons.plus;
+                small: true;
+                label: "15 minutes later";
+                clicked => { root.shift-time(15); }
+            }
+        }
+        ChipScroller {
+            for h[i] in [{ t: "1 h ago", d: 60 }, { t: "3 h ago", d: 180 }, { t: "This morning", d: -1 }, { t: "Last night", d: -2 }]: Chip {
+                text: h.t;
+                clicked => { root.quick-time(h.d); }
+            }
         }
     }
 
     Field {
         label: "Note";
-        placeholder: "Optional";
+        placeholder: root.kind == 2 ? "Optional, e.g. ATM" : "Optional, e.g. Lunch with team";
+        on: TileStyle.muted;
         text <=> root.note;
     }
 
@@ -174,26 +350,13 @@ export component AddScreen inherits VerticalLayout {
             Key { text: "9"; pressed => { root.press("9"); } }
         }
         Row {
-            Key { text: "."; pressed => { root.press("."); } }
+            Key { text: "."; label: "Decimal point"; pressed => { root.press("."); } }
             Key { text: "0"; pressed => { root.press("0"); } }
-            Key { icon: Icons.backspace; accessible-label: "Delete digit"; pressed => { root.press("<"); } }
+            Key { icon: Icons.backspace; label: "Delete digit"; pressed => { root.press("<"); } }
         }
     }
 
-    PillButton {
-        text: "Save entry";
-        icon: Icons.check;
-        kind: ButtonStyle.accent;
-        clicked => {
-            if root.category < 0 {
-                root.error = "Choose a category";
-                return;
-            }
-            root.error = root.save(root.kind == 1, root.amount, root.category, root.account, root.days-ago, root.note);
-            if root.error == "" {
-                root.reset();
-                root.close();
-            }
-        }
-    }
+    // The save button lives in the pinned bar of the window (always visible);
+    // this keeps room for it at the end of the page.
+    Rectangle { height: 64px; }
 }

@@ -1,21 +1,31 @@
 import { Theme, Type, Icons } from "../theme.slint";
-import { Tile, TileStyle, Chip, ChipScroller, Caption, CardTitle, Metric, PageTitle, PillNav,
+import { Tile, TileStyle, Chip, ChipScroller, Caption, CardTitle, Amount, PageTitle, PillNav,
          IconButton, IconButtonStyle, PillButton, ButtonStyle } from "../components/bento.slint";
 
 export component SettingsScreen inherits VerticalLayout {
     in property <string> currency;
     in property <int> cycle-day;
+    in property <int> weekend;          // 0 Fri–Sat, 1 Sat–Sun
     in property <string> version;
+    in property <string> data-note;     // "312 entries since 1 Sep 2026"
     in property <bool> can-load-demo;
+    callback close();
     callback palette-changed(int);
     callback dark-changed(bool);
     callback cycle-day-changed(int);
+    callback weekend-changed(int);
     callback currency-changed(string);
     callback load-demo();
 
     property <[string]> currencies: ["SAR", "AED", "KWD", "QAR", "BHD", "OMR", "EGP", "JOD", "MAD", "DZD", "TND", "IQD", "USD", "EUR", "GBP"];
 
     spacing: Theme.gap;
+
+    HorizontalLayout {
+        spacing: Theme.space-3;
+        IconButton { icon: Icons.back; label: "Back"; clicked => { root.close(); } }
+        Rectangle { horizontal-stretch: 1; }
+    }
 
     PageTitle { first: "App"; second: "Settings"; }
 
@@ -29,7 +39,7 @@ export component SettingsScreen inherits VerticalLayout {
                     text: name;
                     swatch: Theme.accents[i];
                     active: Theme.palette == i;
-                    on-tile: true;
+                    on: TileStyle.surface;
                     clicked => { root.palette-changed(i); }
                 }
             }
@@ -38,10 +48,10 @@ export component SettingsScreen inherits VerticalLayout {
             spacing: Theme.space-2;
             Caption { text: "Mode"; }
             PillNav {
-                items: ["Light", "Dark"];
-                on-tile: true;
-                current: Theme.dark ? 1 : 0;
-                changed(i) => { root.dark-changed(i == 1); }
+                items: ["Dark", "Light"];
+                on: TileStyle.surface;
+                current: Theme.dark ? 0 : 1;
+                changed(i) => { root.dark-changed(i == 0); }
             }
         }
     }
@@ -61,22 +71,40 @@ export component SettingsScreen inherits VerticalLayout {
                 icon: Icons.minus;
                 kind: IconButtonStyle.muted;
                 enabled: root.cycle-day > 1;
-                accessible-label: "Earlier day";
+                label: "Earlier payday";
                 clicked => { root.cycle-day-changed(root.cycle-day - 1); }
             }
             VerticalLayout {
                 alignment: center;
                 min-width: 120px;
-                Metric { text: "Day " + root.cycle-day; horizontal-alignment: center; }
+                Text {
+                    text: "Day " + root.cycle-day;
+                    font-size: Type.metric-md;
+                    font-weight: 500;
+                    letter-spacing: -1px;
+                    color: Theme.c.ink;
+                    horizontal-alignment: center;
+                }
             }
             IconButton {
                 icon: Icons.plus;
                 kind: IconButtonStyle.muted;
                 enabled: root.cycle-day < 28;
-                accessible-label: "Later day";
+                label: "Later payday";
                 clicked => { root.cycle-day-changed(root.cycle-day + 1); }
             }
         }
+    }
+
+    Tile {
+        CardTitle { text: "Weekend"; }
+        PillNav {
+            items: ["Fri – Sat", "Sat – Sun"];
+            on: TileStyle.surface;
+            current: root.weekend;
+            changed(i) => { root.weekend-changed(i); }
+        }
+        Caption { text: "Used for weekday vs. weekend statistics and working hours."; wrap: word-wrap; }
     }
 
     Tile {
@@ -85,10 +113,11 @@ export component SettingsScreen inherits VerticalLayout {
             for code in root.currencies: Chip {
                 text: code;
                 active: code == root.currency;
-                on-tile: true;
+                on: TileStyle.surface;
                 clicked => { root.currency-changed(code); }
             }
         }
+        Caption { text: "Changes the label only. Amounts are not converted."; }
     }
 
     Tile {
@@ -96,11 +125,12 @@ export component SettingsScreen inherits VerticalLayout {
         inner-spacing: Theme.space-2;
         CardTitle { text: "Private by design"; }
         Text {
-            text: "Everything stays in a database on this phone. No account, no ads, no tracking.";
+            text: "Everything stays in a database on this phone. No account, no internet permission, no ads.";
             wrap: word-wrap;
             font-size: Type.label;
             color: Theme.c.ink-muted;
         }
+        if root.data-note != "": Caption { text: root.data-note; }
         if root.can-load-demo: HorizontalLayout {
             alignment: start;
             padding-top: Theme.space-2;

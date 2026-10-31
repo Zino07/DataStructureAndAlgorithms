@@ -1,6 +1,6 @@
 import { Theme, Type, Icons } from "../theme.slint";
-import { Tile, TileStyle, Chip, ChipScroller, Caption, CardTitle, Metric, PageTitle, PillButton, ButtonStyle,
-         Field, ListRow } from "../components/bento.slint";
+import { Tile, TileStyle, Chip, ChipScroller, Caption, CardTitle, Amount, PageTitle, PillButton, ButtonStyle,
+         Field, ListRow, IconButton, IconButtonStyle } from "../components/bento.slint";
 import { Dashboard, AccountItem } from "../data.slint";
 
 export component AccountsScreen inherits VerticalLayout {
@@ -9,10 +9,13 @@ export component AccountsScreen inherits VerticalLayout {
     in-out property <string> error;
     // returns "" on success, otherwise an error message
     callback add-account(string /* name */, int /* kind */, string /* opening */) -> string;
+    callback archive(int) -> string;
+    callback transfer();
 
     property <string> name;
     property <int> kind: 1;
     property <string> opening;
+    property <int> selected: -1;
 
     spacing: Theme.gap;
 
@@ -20,24 +23,57 @@ export component AccountsScreen inherits VerticalLayout {
 
     Tile {
         style: TileStyle.inverse;
-        inner-spacing: Theme.space-1;
-        Caption { text: "Total balance · " + root.dash.currency; on: TileStyle.inverse; }
-        Metric { text: root.dash.balance; large: true; on: TileStyle.inverse; }
-        Caption {
-            text: root.accounts.length + (root.accounts.length == 1 ? " account" : " accounts");
-            on: TileStyle.inverse;
+        inner-spacing: Theme.space-2;
+        Caption { text: "Total balance"; on: TileStyle.inverse; }
+        Amount { value: root.dash.balance; unit: root.dash.currency; size: Type.metric-xl; on: TileStyle.inverse; }
+        HorizontalLayout {
+            padding-top: Theme.space-2;
+            Caption {
+                text: root.accounts.length + (root.accounts.length == 1 ? " account" : " accounts");
+                on: TileStyle.inverse;
+                horizontal-stretch: 1;
+                vertical-alignment: center;
+            }
+            PillButton {
+                text: "Move money";
+                icon: Icons.swap;
+                small: true;
+                kind: ButtonStyle.accent;
+                enabled: root.accounts.length > 1;
+                clicked => { root.transfer(); }
+            }
         }
     }
 
     Tile {
-        inner-spacing: Theme.space-1;
+        inner-spacing: 2px;
         pad: Theme.space-5;
         for acc in root.accounts: ListRow {
             icon: acc.icon;
             title: acc.name;
             meta: acc.kind;
-            value: acc.balance;
+            value: root.selected == acc.id ? "" : acc.balance;
             negative: acc.negative;
+            selected: root.selected == acc.id;
+            clicked => {
+                root.selected = root.selected == acc.id ? -1 : acc.id;
+                root.error = "";
+            }
+            if root.selected == acc.id: PillButton {
+                text: "Archive";
+                small: true;
+                kind: ButtonStyle.ghost;
+                y: (parent.height - self.height) / 2;
+                clicked => {
+                    root.error = root.archive(acc.id);
+                    root.selected = -1;
+                }
+            }
+        }
+        if root.selected >= 0: Caption {
+            text: "Archived accounts keep their history in statistics.";
+            height: 24px;
+            vertical-alignment: bottom;
         }
     }
 
@@ -46,21 +82,21 @@ export component AccountsScreen inherits VerticalLayout {
         CardTitle { text: "Add an account"; }
         Field {
             label: "Name";
-            placeholder: "e.g. Al Rajhi, Wallet";
+            placeholder: "e.g. Main bank, Wallet";
             text <=> root.name;
         }
         VerticalLayout {
             spacing: Theme.space-2;
             Caption { text: "Type"; }
             ChipScroller {
-                Chip { text: "Cash"; on-tile: true; active: root.kind == 0; clicked => { root.kind = 0; } }
-                Chip { text: "Bank"; on-tile: true; active: root.kind == 1; clicked => { root.kind = 1; } }
-                Chip { text: "Card"; on-tile: true; active: root.kind == 2; clicked => { root.kind = 2; } }
-                Chip { text: "Savings"; on-tile: true; active: root.kind == 3; clicked => { root.kind = 3; } }
+                Chip { text: "Cash"; on: TileStyle.surface; active: root.kind == 0; clicked => { root.kind = 0; } }
+                Chip { text: "Bank"; on: TileStyle.surface; active: root.kind == 1; clicked => { root.kind = 1; } }
+                Chip { text: "Card"; on: TileStyle.surface; active: root.kind == 2; clicked => { root.kind = 2; } }
+                Chip { text: "Savings"; on: TileStyle.surface; active: root.kind == 3; clicked => { root.kind = 3; } }
             }
         }
         Field {
-            label: "Opening balance · " + root.dash.currency;
+            label: "Opening balance (" + root.dash.currency + ")";
             placeholder: "0.00";
             input-type: InputType.decimal;
             text <=> root.opening;
@@ -68,7 +104,9 @@ export component AccountsScreen inherits VerticalLayout {
         if root.error != "": Text {
             text: root.error;
             font-size: Type.label;
+            font-weight: 600;
             color: Theme.c.negative;
+            wrap: word-wrap;
         }
         PillButton {
             text: "Add account";

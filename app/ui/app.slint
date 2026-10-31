@@ -3,18 +3,22 @@ import "../fonts/Manrope-Medium.ttf";
 import "../fonts/Manrope-SemiBold.ttf";
 import "../fonts/Manrope-Bold.ttf";
 
-import { Theme, Icons } from "theme.slint";
-import { Dock, DockItem } from "components/bento.slint";
-import { Dashboard, Bar, TxRow, CategoryItem, CategoryShare, AccountItem } from "data.slint";
+import { Theme, Type, Icons, Glass } from "theme.slint";
+import { Dock, DockItem, Toast, PillButton, ButtonStyle } from "components/bento.slint";
+import { Dashboard, Bar, TxRow, CategoryItem, CategoryShare, AccountItem, SuggestionItem, Insight,
+         BudgetRow, StatsView } from "data.slint";
 import { HomeScreen } from "screens/home.slint";
 import { ActivityScreen } from "screens/activity.slint";
 import { AddScreen } from "screens/add.slint";
 import { AccountsScreen } from "screens/accounts.slint";
 import { SettingsScreen } from "screens/settings.slint";
+import { StatsScreen } from "screens/stats.slint";
+import { BudgetsScreen } from "screens/budgets.slint";
 
-export { Theme, Dashboard, Bar, TxRow, CategoryItem, CategoryShare, AccountItem }
+export { Theme, Dashboard, Bar, TxRow, CategoryItem, CategoryShare, AccountItem, SuggestionItem, Insight,
+         BudgetRow, StatsView }
 
-export enum Screen { home, activity, accounts, settings }
+export enum Screen { home, activity, stats, accounts, settings, budgets }
 
 export component AppWindow inherits Window {
     title: "Income Radar";
@@ -23,35 +27,80 @@ export component AppWindow inherits Window {
     default-font-family: "Manrope";
     background: Theme.c.canvas;
 
+    // home
     in property <Dashboard> dash;
     in property <[Bar]> week;
     in property <[TxRow]> recent;
-    in property <[TxRow]> activity;
     in property <[CategoryShare]> top-categories;
+    // activity
+    in property <[TxRow]> activity;
+    in property <string> activity-note;
+    in-out property <int> activity-filter: 0;
+    in-out property <string> activity-query;
+    // entry
     in property <[CategoryItem]> expense-categories;
     in property <[CategoryItem]> income-categories;
+    in property <[SuggestionItem]> expense-suggestions;
+    in property <[SuggestionItem]> income-suggestions;
+    in property <int> now-minute;
+    // stats
+    in property <StatsView> stats;
+    in property <[Bar]> flow;
+    in property <[Bar]> hours;
+    in property <[string]> week-labels;
+    in property <[float]> heat;
+    in property <int> heat-peak: -1;
+    in property <[CategoryShare]> stat-categories;
+    in property <[TxRow]> largest;
+    in property <[Insight]> insights;
+    in-out property <int> stats-range: 0;
+    // accounts, budgets, settings
     in property <[AccountItem]> accounts;
+    in property <[BudgetRow]> budget-rows;
     in property <int> cycle-day: 1;
+    in property <int> weekend: 0;
     in property <string> version;
+    in property <string> data-note;
     in property <bool> can-load-demo;
+    // navigation
     in-out property <Screen> screen: Screen.home;
     in-out property <bool> adding: false;
-    in-out property <int> activity-filter: 0;
+    // toast
+    in-out property <string> toast-text;
+    in-out property <string> toast-action;
 
-    callback save-entry(bool, string, int, int, int, string) -> string;
-    pure callback edit-amount(string, string) -> string;
+    callback save-entry(int, int, string, int, int, int, int, int, string) -> string;
     callback delete-entry(int);
+    callback delete-transfer(int);
+    pure callback edit-amount(string, string) -> string;
+    pure callback day-label(int) -> string;
+    pure callback time-label(int) -> string;
+    // asks Rust to call `load-entry` with the stored values
+    callback request-edit(int);
     callback activity-filter-changed(int);
+    callback activity-query-changed(string);
+    callback stats-range-changed(int);
     callback add-account(string, int, string) -> string;
+    callback archive-account(int) -> string;
+    callback save-budget(int, string) -> string;
     callback palette-changed(int);
     callback dark-changed(bool);
     callback cycle-day-changed(int);
+    callback weekend-changed(int);
     callback currency-changed(string);
     callback load-demo();
+    callback toast-act();
+    callback screen-changed(Screen);
 
-    property <length> top-inset: Math.max(root.safe-area-insets.top, 12px);
-    property <length> bottom-inset: root.safe-area-insets.bottom;
+    // Some Android builds report no insets while the status / navigation bar
+    // still draws over the window, so the platform sets a floor.
+    in property <length> min-top-inset: 0px;
+    in property <length> min-bottom-inset: 0px;
+    property <length> top-inset: Math.max(root.safe-area-insets.top, root.min-top-inset);
+    property <length> bottom-inset: Math.max(root.safe-area-insets.bottom, root.min-bottom-inset);
     property <length> keyboard: root.virtual-keyboard-size.height;
+    property <bool> scrolled: main-scroll.content-y < -24px;
+    property <bool> show-dock: !root.adding && root.screen != Screen.settings && root.screen != Screen.budgets;
 
     public function open-add() {
         add-screen.reset();
@@ -59,13 +108,38 @@ export component AppWindow inherits Window {
         add-scroll.content-y = 0;
     }
 
-    public function scroll-to(y: float) {
-        main-scroll.content-y = -y * 1px;
+    public function open-transfer() {
+        add-screen.start-transfer();
+        root.adding = true;
+        add-scroll.content-y = 0;
     }
 
-    function go(s: Screen) {
+    public function load-entry(id: int, kind: int, amount: string, category: int, account: int,
+                               days-ago: int, minute: int, note: string) {
+        add-screen.load(id, kind, amount, category, account, days-ago, minute, note);
+        root.adding = true;
+        add-scroll.content-y = 0;
+    }
+
+    // Scrolls whichever page is showing; clamped to its content.
+    public function scroll-to(y: float) {
+        if root.adding {
+            add-scroll.content-y = -Math.clamp(y * 1px, 0, Math.max(0, add-content.preferred-height - add-scroll.height));
+        } else {
+            main-scroll.content-y = -Math.clamp(y * 1px, 0, Math.max(0, main-content.preferred-height - main-scroll.height));
+        }
+    }
+
+    // current scroll offset of the visible page, in px
+    out property <float> scroll-pos: (root.adding ? -add-scroll.content-y : -main-scroll.content-y) / 1px;
+    // error shown on the entry screen
+    out property <string> entry-error: add-screen.error;
+
+    public function go(s: Screen) {
         root.screen = s;
+        root.adding = false;
         main-scroll.content-y = 0;
+        root.screen-changed(s);
     }
 
     main-scroll := Flickable {
@@ -73,11 +147,11 @@ export component AppWindow inherits Window {
         content-height: main-content.preferred-height;
         main-content := VerticalLayout {
             width: main-scroll.width;
-            padding-left: 16px;
-            padding-right: 16px;
-            padding-top: root.top-inset + 8px;
+            padding-left: Theme.margin;
+            padding-right: Theme.margin;
+            padding-top: root.top-inset + 12px;
             // room for the floating dock
-            padding-bottom: root.bottom-inset + 112px;
+            padding-bottom: root.bottom-inset + (root.show-dock ? 116px : 32px);
 
             if root.screen == Screen.home: HomeScreen {
                 dash: root.dash;
@@ -85,37 +159,80 @@ export component AppWindow inherits Window {
                 recent: root.recent;
                 top-categories: root.top-categories;
                 add => { root.open-add(); }
+                edit(id) => { root.request-edit(id); }
                 open-activity => { root.go(Screen.activity); }
                 open-accounts => { root.go(Screen.accounts); }
+                open-stats => { root.go(Screen.stats); }
+                open-settings => { root.go(Screen.settings); }
+                load-demo => { root.load-demo(); }
             }
             if root.screen == Screen.activity: ActivityScreen {
                 dash: root.dash;
                 rows: root.activity;
+                result-note: root.activity-note;
                 filter: root.activity-filter;
+                query: root.activity-query;
                 filter-changed(i) => {
                     root.activity-filter = i;
                     root.activity-filter-changed(i);
                 }
-                delete(id) => { root.delete-entry(id); }
+                query-changed(q) => {
+                    root.activity-query = q;
+                    root.activity-query-changed(q);
+                }
+                edit(id) => { root.request-edit(id); }
+                delete-transfer(id) => { root.delete-transfer(id); }
+            }
+            if root.screen == Screen.stats: StatsScreen {
+                stats: root.stats;
+                currency: root.dash.currency;
+                clock: root.dash.clock;
+                flow: root.flow;
+                hours: root.hours;
+                week-labels: root.week-labels;
+                heat: root.heat;
+                heat-peak: root.heat-peak;
+                categories: root.stat-categories;
+                largest: root.largest;
+                insights: root.insights;
+                range: root.stats-range;
+                range-changed(i) => {
+                    root.stats-range = i;
+                    root.stats-range-changed(i);
+                }
+                open-budgets => { root.go(Screen.budgets); }
+                edit(id) => { root.request-edit(id); }
             }
             if root.screen == Screen.accounts: AccountsScreen {
                 dash: root.dash;
                 accounts: root.accounts;
                 add-account(name, kind, opening) => { return root.add-account(name, kind, opening); }
+                archive(id) => { return root.archive-account(id); }
+                transfer => { root.open-transfer(); }
             }
             if root.screen == Screen.settings: SettingsScreen {
                 currency: root.dash.currency;
                 cycle-day: root.cycle-day;
+                weekend: root.weekend;
                 version: root.version;
+                data-note: root.data-note;
                 can-load-demo: root.can-load-demo;
+                close => { root.go(Screen.home); }
                 palette-changed(i) => { root.palette-changed(i); }
                 dark-changed(d) => { root.dark-changed(d); }
                 cycle-day-changed(d) => { root.cycle-day-changed(d); }
+                weekend-changed(w) => { root.weekend-changed(w); }
                 currency-changed(c) => { root.currency-changed(c); }
                 load-demo => {
                     root.load-demo();
                     root.go(Screen.home);
                 }
+            }
+            if root.screen == Screen.budgets: BudgetsScreen {
+                rows: root.budget-rows;
+                currency: root.dash.currency;
+                close => { root.go(Screen.stats); }
+                save(id, text) => { return root.save-budget(id, text); }
             }
         }
     }
@@ -125,44 +242,131 @@ export component AppWindow inherits Window {
         content-height: add-content.preferred-height;
         add-content := VerticalLayout {
             width: add-scroll.width;
-            padding-left: 16px;
-            padding-right: 16px;
-            padding-top: root.top-inset + 8px;
-            padding-bottom: Math.max(root.bottom-inset, root.keyboard) + 16px;
+            padding-left: Theme.margin;
+            padding-right: Theme.margin;
+            padding-top: root.top-inset + 12px;
+            padding-bottom: Math.max(root.bottom-inset, root.keyboard) + 20px;
             add-screen := AddScreen {
                 currency: root.dash.currency;
                 expense-categories: root.expense-categories;
                 income-categories: root.income-categories;
                 accounts: root.accounts;
+                expense-suggestions: root.expense-suggestions;
+                income-suggestions: root.income-suggestions;
+                now-minute: root.now-minute;
                 close => { root.adding = false; }
-                save(income, amount, category, account, days, note) => {
-                    return root.save-entry(income, amount, category, account, days, note);
+                save(id, kind, amount, category, account, to, days, minute, note) => {
+                    return root.save-entry(id, kind, amount, category, account, to, days, minute, note);
                 }
+                delete(id) => { root.delete-entry(id); }
                 edit-amount(current, key) => { return root.edit-amount(current, key); }
+                day-label(d) => { return root.day-label(d); }
+                time-label(m) => { return root.time-label(m); }
             }
         }
     }
 
-    if !root.adding: Dock {
+    // Glass behind the status bar: appears once content scrolls under it.
+    Rectangle {
+        y: 0;
+        height: root.top-inset + (root.scrolled && !root.adding ? 52px : 0px);
+        background: root.scrolled || root.adding ? Glass.bar : transparent;
+        animate height, background { duration: 200ms; easing: ease-out; }
+        Rectangle {
+            y: parent.height - 1px;
+            height: 1px;
+            background: root.scrolled && !root.adding ? Glass.bar-edge : transparent;
+        }
+        if root.scrolled && !root.adding: Text {
+            y: root.top-inset;
+            height: 52px;
+            x: Theme.margin;
+            text: root.screen == Screen.home ? "Income Radar"
+                : root.screen == Screen.activity ? "Activity"
+                : root.screen == Screen.stats ? "Stats"
+                : root.screen == Screen.accounts ? "Accounts"
+                : root.screen == Screen.budgets ? "Budgets"
+                : "Settings";
+            font-size: Type.h3;
+            font-weight: 600;
+            color: Theme.c.ink;
+            vertical-alignment: center;
+        }
+    }
+
+    // Fade behind the system navigation bar and the dock.
+    Rectangle {
+        y: parent.height - self.height;
+        height: root.bottom-inset + (root.show-dock ? 64px : 0px);
+        background: @linear-gradient(0deg, Theme.c.canvas.with-alpha(0.94) 0%, Theme.c.canvas.with-alpha(0.94) 35%, Theme.c.canvas.with-alpha(0) 100%);
+    }
+
+    // Entry screen: the save button is pinned above the keyboard / nav bar on glass.
+    if root.adding: save-bar := Rectangle {
+        property <length> lift: Math.max(root.bottom-inset, root.keyboard);
+        y: parent.height - self.height;
+        height: lift + 80px + (add-screen.error != "" ? 40px : 0px);
+        background: @linear-gradient(0deg, Theme.c.canvas 0%, Theme.c.canvas 55%, Theme.c.canvas.with-alpha(0) 100%);
+        if add-screen.error != "": Rectangle {
+            x: Theme.margin;
+            y: parent.height - save-bar.lift - 16px - 48px - self.height - 8px;
+            width: parent.width - 2 * Theme.margin;
+            height: 32px;
+            border-radius: 16px;
+            background: Theme.c.negative;
+            Text {
+                text: add-screen.error;
+                font-size: Type.label;
+                font-weight: 600;
+                color: #ffffff;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+        }
+        PillButton {
+            x: Theme.margin;
+            y: parent.height - save-bar.lift - self.height - 16px;
+            width: parent.width - 2 * Theme.margin;
+            text: add-screen.save-label;
+            icon: Icons.check;
+            kind: ButtonStyle.accent;
+            clicked => { add-screen.submit(); }
+        }
+    }
+
+    if root.show-dock: Dock {
         x: (parent.width - self.width) / 2;
-        y: parent.height - self.height - root.bottom-inset - 20px;
+        y: parent.height - self.height - root.bottom-inset - 16px;
         items: [
             { icon: Icons.grid, label: "Home" },
             { icon: Icons.activity, label: "Activity" },
             { icon: Icons.plus, label: "Add entry" },
+            { icon: Icons.chart, label: "Stats" },
             { icon: Icons.wallet, label: "Accounts" },
-            { icon: Icons.sliders, label: "Settings" },
         ];
         current: root.screen == Screen.home ? 0
             : root.screen == Screen.activity ? 1
-            : root.screen == Screen.accounts ? 3
-            : 4;
+            : root.screen == Screen.stats ? 3
+            : root.screen == Screen.accounts ? 4
+            : -1;
         selected(i) => {
             if i == 0 { root.go(Screen.home); }
             if i == 1 { root.go(Screen.activity); }
             if i == 2 { root.open-add(); }
-            if i == 3 { root.go(Screen.accounts); }
-            if i == 4 { root.go(Screen.settings); }
+            if i == 3 { root.go(Screen.stats); }
+            if i == 4 { root.go(Screen.accounts); }
         }
+    }
+
+    // hidden while the entry screen is open: it would sit on the keypad and
+    // an accidental tap on "Undo" would remove the entry being corrected
+    if root.toast-text != "" && !root.adding: Toast {
+        x: Theme.margin;
+        width: parent.width - 2 * Theme.margin;
+        y: parent.height - self.height - root.bottom-inset - (root.show-dock ? 96px : 24px);
+        text: root.toast-text;
+        action: root.toast-action;
+        act => { root.toast-act(); }
     }
 }

@@ -47,3 +47,6 @@ theme = "@android:style/Theme.Material.NoActionBar"
 config_changes = "orientation|screenSize|screenLayout|keyboardHidden|uiMode|density"
 orientation = "portrait"
 launch_mode = "singleTop"
+
+[target.'cfg(not(target_os = "android"))'.dev-dependencies]
+i-slint-backend-testing = "=1.18.1"

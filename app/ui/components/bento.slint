@@ -1,15 +1,15 @@
 // Bento Neo components: tiles, notch card, pills, icon buttons, chips, badges,
-// progress, pill bars, list rows, segmented nav and the floating dock.
+// progress, pill bars, dot matrix, list rows, segmented nav, glass dock.
 
-import { Theme, Type, Icons } from "../theme.slint";
+import { Theme, Type, Icons, Glass } from "../theme.slint";
 
 export enum TileStyle { surface, inverse, accent, soft, muted }
-export enum ButtonStyle { inverse, accent, ghost }
-export enum IconButtonStyle { surface, inverse, accent, muted, outline }
+export enum ButtonStyle { inverse, accent, ghost, danger }
+export enum IconButtonStyle { surface, inverse, accent, muted, outline, glass }
 
 export struct Bar {
     value: float,      // 0..1 of the tallest bar
-    label: string,
+    label: string,     // axis label ("" hides it)
     tip: string,       // value bubble text for the highlighted bar
     highlight: bool,
     empty: bool,
@@ -49,6 +49,13 @@ export global Ink {
         if style == TileStyle.muted { return Theme.c.surface-muted; }
         return Theme.c.surface;
     }
+    // A fill that stays visible on top of the given tile.
+    public pure function raised(style: TileStyle) -> color {
+        if style == TileStyle.inverse { return Theme.c.ink-inverse.with-alpha(0.12); }
+        if style == TileStyle.accent { return Theme.c.on-accent.with-alpha(0.10); }
+        if style == TileStyle.soft { return Theme.c.surface; }
+        return Theme.c.surface-muted;
+    }
 }
 
 export component Caption inherits Text {
@@ -56,7 +63,7 @@ export component Caption inherits Text {
     font-size: Type.caption;
     font-weight: 500;
     color: Ink.muted(on);
-    letter-spacing: 0.1px;
+    overflow: elide;
 }
 
 export component Label inherits Text {
@@ -64,46 +71,69 @@ export component Label inherits Text {
     font-size: Type.label;
     font-weight: 500;
     color: Ink.fg(on);
+    overflow: elide;
 }
 
 export component CardTitle inherits Text {
     in property <TileStyle> on: TileStyle.surface;
     font-size: Type.h3;
     font-weight: 600;
-    letter-spacing: -0.17px;
-    color: Ink.fg(on);
-}
-
-export component Metric inherits Text {
-    in property <TileStyle> on: TileStyle.surface;
-    in property <bool> large: false;
-    // Shrink long numbers instead of truncating them.
-    font-size: large
-        ? (self.text.character-count > 10 ? 36px : self.text.character-count > 8 ? 42px : Type.metric-xl)
-        : (self.text.character-count > 9 ? 28px : Type.metric-md);
-    font-weight: 500;
-    letter-spacing: large ? -1.6px : -1px;
+    letter-spacing: -0.16px;
     color: Ink.fg(on);
     overflow: elide;
+    vertical-alignment: center;
+}
+
+// A number with an optional unit set smaller beside it ("29,894.81 SAR").
+// Long numbers shrink instead of being cut off.
+export component Amount inherits HorizontalLayout {
+    in property <string> value;
+    in property <string> unit;
+    in property <TileStyle> on: TileStyle.surface;
+    in property <length> size: Type.metric-md;
+    in property <color> color: Ink.fg(on);
+    property <int> chars: value.character-count;
+    property <length> fitted: chars > 12 ? size * 0.66 : chars > 10 ? size * 0.76 : chars > 8 ? size * 0.88 : size;
+    spacing: 6px;
+    alignment: start;
+    Text {
+        text: root.value;
+        font-size: root.fitted;
+        font-weight: 500;
+        letter-spacing: root.fitted * -0.035;
+        color: root.color;
+        vertical-alignment: bottom;
+    }
+    if root.unit != "": Text {
+        text: root.unit;
+        font-size: Math.max(Type.caption, root.fitted * 0.32);
+        font-weight: 600;
+        color: Ink.muted(root.on);
+        vertical-alignment: bottom;
+        // optical baseline match with the big digits
+        height: root.fitted * 0.98;
+    }
 }
 
 // Two-weight page title: first word muted/400, second ink/600.
 export component PageTitle inherits VerticalLayout {
     in property <string> first;
     in property <string> second;
-    spacing: -6px;
+    spacing: -8px;
+    padding-top: 4px;
+    padding-bottom: 4px;
     Text {
         text: first;
         font-size: Type.display;
         font-weight: 400;
-        letter-spacing: -1.3px;
+        letter-spacing: -1.4px;
         color: Theme.c.ink-muted;
     }
     Text {
         text: second;
         font-size: Type.display;
         font-weight: 600;
-        letter-spacing: -1.3px;
+        letter-spacing: -1.4px;
         color: Theme.c.ink;
     }
 }
@@ -117,7 +147,6 @@ export component Tile inherits Rectangle {
     border-radius: small ? Theme.radius-md : Theme.radius-lg;
     background: Ink.bg(style);
     clip: true;
-    animate background { duration: 200ms; }
     VerticalLayout {
         padding: small ? Theme.space-4 : root.pad;
         spacing: root.inner-spacing;
@@ -132,9 +161,14 @@ export component IconButton inherits Rectangle {
     in property <bool> small: false;
     in property <bool> enabled: true;
     in property <color> outline-color: Theme.c.ink;
+    in property <string> label;
     callback clicked;
 
     accessible-role: button;
+    accessible-label: root.label;
+    accessible-enabled: root.enabled;
+    accessible-action-default => { if root.enabled { root.clicked(); } }
+
     width: small ? Theme.control-md : Theme.control-lg;
     height: self.width;
     border-radius: self.width / 2;
@@ -142,11 +176,12 @@ export component IconButton inherits Rectangle {
         : kind == IconButtonStyle.accent ? Theme.c.accent
         : kind == IconButtonStyle.muted ? Theme.c.surface-muted
         : kind == IconButtonStyle.outline ? transparent
+        : kind == IconButtonStyle.glass ? Glass.dark
         : Theme.c.surface;
-    border-width: kind == IconButtonStyle.outline ? 1px : 0px;
-    border-color: outline-color.with-alpha(0.5);
-    opacity: enabled ? 1 : 0.4;
-    transform-scale-x: ta.pressed ? 96% : 100%;
+    border-width: kind == IconButtonStyle.outline || kind == IconButtonStyle.glass ? 1px : 0px;
+    border-color: kind == IconButtonStyle.glass ? Glass.dark-edge : outline-color.with-alpha(0.35);
+    opacity: enabled ? 1 : 0.35;
+    transform-scale-x: ta.pressed ? 94% : 100%;
     transform-scale-y: self.transform-scale-x;
     animate transform-scale-x { duration: 100ms; easing: ease-out; }
 
@@ -155,6 +190,7 @@ export component IconButton inherits Rectangle {
         stroke: kind == IconButtonStyle.inverse ? Theme.c.ink-inverse
             : kind == IconButtonStyle.accent ? Theme.c.on-accent
             : kind == IconButtonStyle.outline ? root.outline-color
+            : kind == IconButtonStyle.glass ? Glass.dark-ink
             : Theme.c.ink;
     }
     ta := TouchArea {
@@ -170,23 +206,30 @@ export component PillButton inherits Rectangle {
     in property <ButtonStyle> kind: ButtonStyle.inverse;
     in property <bool> small: false;
     in property <bool> enabled: true;
+    // the surface a ghost button sits on
+    in property <TileStyle> on: TileStyle.muted;
     callback clicked;
 
     property <color> fg: kind == ButtonStyle.accent ? Theme.c.on-accent
-        : kind == ButtonStyle.ghost ? Theme.c.ink
+        : kind == ButtonStyle.ghost ? Ink.fg(on == TileStyle.muted ? TileStyle.surface : on)
+        : kind == ButtonStyle.danger ? #ffffff
         : Theme.c.ink-inverse;
 
     accessible-role: button;
     accessible-label: root.text;
+    accessible-enabled: root.enabled;
+    accessible-action-default => { if root.enabled { root.clicked(); } }
+
     height: small ? Theme.control-md : Theme.control-lg;
     min-width: lay.preferred-width;
     border-radius: self.height / 2;
     background: kind == ButtonStyle.accent ? Theme.c.accent
-        : kind == ButtonStyle.ghost ? Theme.c.surface
+        : kind == ButtonStyle.ghost ? transparent
+        : kind == ButtonStyle.danger ? Theme.c.negative
         : Theme.c.surface-inverse;
     border-width: kind == ButtonStyle.ghost ? 1px : 0px;
-    border-color: Theme.c.line;
-    opacity: enabled ? 1 : 0.45;
+    border-color: on == TileStyle.inverse ? Theme.c.ink-inverse.with-alpha(0.3) : Theme.c.line;
+    opacity: enabled ? 1 : 0.4;
     transform-scale-x: ta.pressed ? 98% : 100%;
     transform-scale-y: self.transform-scale-x;
     animate transform-scale-x { duration: 100ms; easing: ease-out; }
@@ -205,7 +248,7 @@ export component PillButton inherits Rectangle {
             text: root.text;
             color: root.fg;
             font-size: small ? 13px : 14px;
-            font-weight: 500;
+            font-weight: 600;
             vertical-alignment: center;
         }
     }
@@ -218,32 +261,37 @@ export component PillButton inherits Rectangle {
 // Filter / choice pill.
 export component Chip inherits Rectangle {
     in property <string> text;
+    in property <string> icon;
     in property <bool> active: false;
     in property <bool> accent: false;
     in property <bool> outline: false;
     in property <color> swatch: transparent;
-    // set when the chip sits on a white tile so it stays visible
-    in property <bool> on-tile: false;
+    // the surface the chip sits on, so it stays visible
+    in property <TileStyle> on: TileStyle.muted;
     callback clicked;
 
-    property <color> fg: active ? Theme.c.ink-inverse : accent ? Theme.c.on-accent : Theme.c.ink;
+    property <color> fg: active ? Theme.c.ink-inverse : accent ? Theme.c.on-accent : Ink.fg(on == TileStyle.muted ? TileStyle.surface : on);
 
     accessible-role: button;
     accessible-label: root.text;
+    accessible-checkable: true;
+    accessible-checked: root.active;
+    accessible-action-default => { root.clicked(); }
+
     height: Theme.control-md;
     min-width: lay.preferred-width;
     border-radius: self.height / 2;
     background: active ? Theme.c.surface-inverse
         : accent ? Theme.c.accent
         : outline ? transparent
-        : on-tile ? Theme.c.surface-muted
-        : Theme.c.surface;
+        : on == TileStyle.muted ? Theme.c.surface
+        : Ink.raised(on);
     border-width: outline && !active ? 1px : 0px;
     border-color: Theme.c.line;
-    animate background { duration: 200ms; }
+    animate background { duration: 180ms; }
 
     lay := HorizontalLayout {
-        padding-left: Theme.space-4;
+        padding-left: root.icon != "" || root.swatch != transparent ? 12px : Theme.space-4;
         padding-right: Theme.space-4;
         spacing: 6px;
         alignment: center;
@@ -253,8 +301,12 @@ export component Chip inherits Rectangle {
             y: (parent.height - self.height) / 2;
             border-radius: 6px;
             background: root.swatch;
-            border-width: 1px;
-            border-color: Theme.c.ink.with-alpha(0.15);
+        }
+        if root.icon != "": Icon {
+            data: root.icon;
+            size: 16px;
+            stroke: root.fg;
+            y: (parent.height - self.height) / 2;
         }
         Text {
             text: root.text;
@@ -277,23 +329,23 @@ export component Badge inherits Rectangle {
     height: 22px;
     min-width: lay.preferred-width;
     border-radius: 11px;
-    background: Theme.c.accent-soft;
+    background: neutral ? Theme.c.surface-muted : bad ? Theme.c.negative.with-alpha(0.14) : Theme.c.positive.with-alpha(0.14);
     lay := HorizontalLayout {
-        padding-left: 7px;
+        padding-left: 6px;
         padding-right: 8px;
         spacing: 2px;
         alignment: center;
         if !root.neutral: Icon {
             data: root.up ? Icons.arrow-up : Icons.arrow-down;
             size: 12px;
-            stroke-width: 2px;
+            stroke-width: 2.2px;
             y: (parent.height - self.height) / 2;
             stroke: root.bad ? Theme.c.negative : Theme.c.positive;
         }
         Text {
             text: root.text;
             font-size: 11px;
-            font-weight: 600;
+            font-weight: 700;
             vertical-alignment: center;
             color: root.neutral ? Theme.c.ink : root.bad ? Theme.c.negative : Theme.c.positive;
         }
@@ -304,6 +356,7 @@ export component Progress inherits Rectangle {
     in property <float> value; // 0..1
     in property <color> track: Theme.c.surface-muted;
     in property <color> fill: Theme.c.accent;
+    in property <float> marker: -1; // optional pace marker 0..1
     height: 8px;
     border-radius: 4px;
     background: track;
@@ -315,24 +368,36 @@ export component Progress inherits Rectangle {
         background: root.fill;
         animate width { duration: 300ms; easing: ease-out; }
     }
+    if root.marker >= 0: Rectangle {
+        x: parent.width * Math.clamp(root.marker, 0, 1) - 1px;
+        y: -3px;
+        width: 2px;
+        height: parent.height + 6px;
+        border-radius: 1px;
+        background: Theme.c.ink-muted;
+    }
 }
 
 // Pill bar chart: base bars, one highlighted bar with a value bubble, empty bars muted.
 export component Bars inherits VerticalLayout {
     in property <[Bar]> bars;
     in property <length> chart-height: 120px;
+    in property <length> gap: 8px;
+    in property <length> max-bar: 36px;
     in property <color> base: Theme.c.surface-inverse;
     in property <color> empty: Theme.c.surface-muted;
     in property <color> label-color: Theme.c.ink-muted;
+    in property <color> tip-bg: Theme.c.surface;
+    in property <color> tip-fg: Theme.c.ink;
     spacing: Theme.space-2;
 
-    HorizontalLayout {
+    row := HorizontalLayout {
         height: root.chart-height + 30px;
-        spacing: Theme.space-2;
+        spacing: root.gap;
         for bar in root.bars: Rectangle {
             Rectangle {
-                property <length> h: bar.empty ? 12px : Math.max(16px, root.chart-height * bar.value);
-                width: Math.min(parent.width, 36px);
+                property <length> h: bar.empty ? Math.min(self.width, 8px) : Math.max(Math.min(self.width, 12px), root.chart-height * bar.value);
+                width: Math.min(parent.width, root.max-bar);
                 height: h;
                 x: (parent.width - self.width) / 2;
                 y: parent.height - self.height;
@@ -341,30 +406,74 @@ export component Bars inherits VerticalLayout {
                 animate height { duration: 300ms; easing: ease-out; }
             }
             if bar.highlight && bar.tip != "": Rectangle {
-                property <length> bar-h: Math.max(16px, root.chart-height * bar.value);
+                property <length> bar-h: Math.max(12px, root.chart-height * bar.value);
                 y: parent.height - bar-h - self.height - 6px;
-                x: (parent.width - self.width) / 2;
+                // keep the bubble inside the chart
+                x: Math.clamp((parent.width - self.width) / 2, -parent.x, row.width - parent.x - self.width);
                 height: 24px;
                 width: tip.preferred-width + 16px;
                 border-radius: 12px;
-                background: Theme.c.surface;
+                background: root.tip-bg;
                 tip := Text {
                     text: bar.tip;
                     font-size: Type.caption;
-                    font-weight: 600;
-                    color: Theme.c.ink;
+                    font-weight: 700;
+                    color: root.tip-fg;
                 }
             }
         }
     }
     HorizontalLayout {
-        spacing: Theme.space-2;
+        spacing: root.gap;
         for bar in root.bars: Text {
             text: bar.label;
             horizontal-alignment: center;
-            font-size: Type.caption;
-            font-weight: 500;
+            font-size: Type.micro;
+            font-weight: 600;
             color: root.label-color;
+            wrap: no-wrap;
+        }
+    }
+}
+
+// Rows × 24 hours of dots; size and fill follow the amount. Peak cell in accent.
+export component DotMatrix inherits VerticalLayout {
+    in property <[string]> row-labels;
+    in property <[float]> cells;   // row-major, rows × 24, 0..1
+    in property <int> peak: -1;    // index of the peak cell
+    spacing: 5px;
+    for label[r] in root.row-labels: HorizontalLayout {
+        Text {
+            text: label;
+            width: 34px;
+            font-size: Type.micro;
+            font-weight: 600;
+            color: Theme.c.ink-muted;
+            vertical-alignment: center;
+        }
+        for c in 24: Rectangle {
+            property <float> v: root.cells[r * 24 + c];
+            property <bool> is-peak: r * 24 + c == root.peak;
+            height: 12px;
+            Rectangle {
+                width: v <= 0 ? 4px : 6px + 5px * Math.clamp(v, 0, 1);
+                height: self.width;
+                border-radius: self.width / 2;
+                background: is-peak ? Theme.c.accent
+                    : v <= 0 ? Theme.c.ink-subtle.with-alpha(0.35)
+                    : Theme.c.ink.with-alpha(0.25 + 0.75 * Math.clamp(v, 0, 1));
+            }
+        }
+    }
+    HorizontalLayout {
+        padding-left: 34px;
+        for h in ["00", "", "", "", "", "", "06", "", "", "", "", "", "12", "", "", "", "", "", "18", "", "", "", "", "23"]: Text {
+            text: h;
+            font-size: Type.micro;
+            font-weight: 600;
+            color: Theme.c.ink-muted;
+            horizontal-alignment: center;
+            wrap: no-wrap;
         }
     }
 }
@@ -375,16 +484,23 @@ export component ListRow inherits Rectangle {
     in property <string> title;
     in property <string> meta;
     in property <string> value;
+    in property <string> value-meta;
     in property <bool> positive: false;
     in property <bool> negative: false;
     in property <bool> selected: false;
     in property <TileStyle> on: TileStyle.surface;
+    in property <color> icon-bg: Ink.raised(on);
     callback clicked;
+
+    accessible-role: button;
+    accessible-label: root.title;
+    accessible-description: root.value;
+    accessible-action-default => { root.clicked(); }
 
     height: 60px;
     border-radius: Theme.radius-md;
-    background: selected ? Theme.c.surface-muted : transparent;
-    animate background { duration: 200ms; }
+    background: selected ? Theme.c.surface-muted : ta.pressed ? Theme.c.surface-muted.with-alpha(0.6) : transparent;
+    animate background { duration: 150ms; }
 
     HorizontalLayout {
         padding-left: root.selected ? Theme.space-3 : 0px;
@@ -396,8 +512,8 @@ export component ListRow inherits Rectangle {
             height: 40px;
             y: (parent.height - self.height) / 2;
             border-radius: 20px;
-            background: root.on == TileStyle.surface ? Theme.c.surface-muted : Theme.c.surface;
-            Icon { data: root.icon; }
+            background: root.icon-bg;
+            Icon { data: root.icon; stroke: Ink.fg(root.on); }
         }
         VerticalLayout {
             alignment: center;
@@ -405,52 +521,69 @@ export component ListRow inherits Rectangle {
             horizontal-stretch: 1;
             Text {
                 text: root.title;
-                font-size: Type.body;
+                font-size: Type.body - 1px;
                 font-weight: 600;
                 color: Ink.fg(root.on);
                 overflow: elide;
             }
             Text {
                 text: root.meta;
-                font-size: Type.caption + 1px;
+                font-size: Type.caption;
                 font-weight: 500;
                 color: Ink.muted(root.on);
                 overflow: elide;
             }
         }
         @children
-        if root.value != "": Text {
-            text: root.value;
-            font-size: Type.body;
-            font-weight: 600;
-            vertical-alignment: center;
-            horizontal-alignment: right;
-            color: root.positive ? Theme.c.positive : root.negative ? Theme.c.negative : Ink.fg(root.on);
+        if root.value != "": VerticalLayout {
+            alignment: center;
+            spacing: 2px;
+            Text {
+                text: root.value;
+                font-size: Type.body - 1px;
+                font-weight: 600;
+                horizontal-alignment: right;
+                color: root.positive ? Theme.c.positive : root.negative ? Theme.c.negative : Ink.fg(root.on);
+            }
+            if root.value-meta != "": Text {
+                text: root.value-meta;
+                font-size: Type.caption;
+                font-weight: 500;
+                horizontal-alignment: right;
+                color: Ink.muted(root.on);
+            }
         }
     }
-    TouchArea { clicked => { root.clicked(); } }
+    ta := TouchArea { clicked => { root.clicked(); } }
 }
 
 // Segmented pill nav. Active item is the black pill.
 export component PillNav inherits Rectangle {
     in property <[string]> items;
     in-out property <int> current: 0;
-    in property <bool> on-tile: false;
+    in property <TileStyle> on: TileStyle.muted;
     callback changed(int);
     height: Theme.control-md + 12px;
     border-radius: self.height / 2;
-    background: on-tile ? Theme.c.surface-muted : Theme.c.surface;
+    background: on == TileStyle.muted ? Theme.c.surface : Ink.raised(on);
     HorizontalLayout {
         padding: 6px;
         spacing: Theme.space-1;
         for item[i] in root.items: Rectangle {
+            accessible-role: tab;
+            accessible-label: item;
+            accessible-item-selected: i == root.current;
+            accessible-action-default => {
+                root.current = i;
+                root.changed(i);
+            }
             border-radius: self.height / 2;
             background: i == root.current ? Theme.c.surface-inverse : transparent;
-            animate background { duration: 200ms; }
+            animate background { duration: 180ms; }
             Text {
                 text: item;
                 font-size: Type.label;
-                font-weight: 500;
+                font-weight: i == root.current ? 600 : 500;
                 color: i == root.current ? Theme.c.ink-inverse : Theme.c.ink-muted;
             }
             TouchArea {
@@ -468,7 +601,7 @@ export struct DockItem {
     label: string,
 }
 
-// Floating black pill navigation, bottom centre.
+// Floating dark-glass pill navigation, bottom centre.
 export component Dock inherits Rectangle {
     in property <[DockItem]> items;
     in property <int> current: 0;
@@ -476,10 +609,20 @@ export component Dock inherits Rectangle {
     height: Theme.control-lg + 16px;
     width: lay.preferred-width;
     border-radius: self.height / 2;
-    background: Theme.c.surface-inverse;
-    drop-shadow-blur: 48px;
-    drop-shadow-offset-y: 16px;
-    drop-shadow-color: Theme.dark ? #00000099 : #00000024;
+    background: Glass.dark;
+    border-width: 1px;
+    border-color: Glass.dark-edge;
+    drop-shadow-blur: 32px;
+    drop-shadow-offset-y: 12px;
+    drop-shadow-color: #00000059;
+    // light catching the top edge of the glass
+    Rectangle {
+        y: 1px;
+        x: parent.height / 2;
+        width: parent.width - parent.height;
+        height: 1px;
+        background: @linear-gradient(90deg, #ffffff00 0%, #ffffff33 50%, #ffffff00 100%);
+    }
     lay := HorizontalLayout {
         padding: 8px;
         spacing: 6px;
@@ -487,87 +630,76 @@ export component Dock inherits Rectangle {
             width: Theme.control-lg;
             height: Theme.control-lg;
             border-radius: self.width / 2;
-            background: i == root.current ? Theme.c.accent : transparent;
-            accessible-role: button;
+            background: i == root.current ? Theme.c.accent : ta.pressed ? #ffffff14 : transparent;
+            accessible-role: tab;
             accessible-label: item.label;
-            animate background { duration: 200ms; }
+            accessible-item-selected: i == root.current;
+            accessible-action-default => { root.selected(i); }
+            animate background { duration: 180ms; }
             Icon {
                 data: item.icon;
-                stroke: i == root.current ? Theme.c.on-accent : Theme.c.ink-inverse;
+                stroke: i == root.current ? Theme.c.on-accent : Glass.dark-ink;
             }
-            TouchArea { clicked => { root.selected(i); } }
+            ta := TouchArea { clicked => { root.selected(i); } }
         }
     }
 }
 
 // Card with the signature notched top-right corner holding one round action.
+// The outline is one path, so the bite shows whatever is behind the card.
 export component NotchCard inherits Rectangle {
     in property <TileStyle> style: TileStyle.surface;
     in property <string> icon: Icons.arrow-up-right;
+    in property <string> label;
     in property <IconButtonStyle> button-kind: IconButtonStyle.inverse;
-    in property <color> notch-bg: Theme.c.canvas;
     callback action;
 
-    property <length> bite: 56px;
-    property <length> fillet: 20px;
-    property <color> card: Ink.bg(style);
+    property <float> w: self.width / 1px;
+    property <float> h: self.height / 1px;
+    property <float> r: 28;   // card radius
+    property <float> b: 56;   // bite: 48px button + 8px clearance
+    property <float> f: 16;   // fillet radius
 
-    border-radius: Theme.radius-lg;
-    background: card;
+    Path {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+        viewbox-x: 0;
+        viewbox-y: 0;
+        viewbox-width: root.w;
+        viewbox-height: root.h;
+        fill: Ink.bg(root.style);
+        stroke: transparent;
+        stroke-width: 0;
+        commands: "M 0 " + root.r
+            + " A " + root.r + " " + root.r + " 0 0 1 " + root.r + " 0"
+            + " L " + (root.w - root.b - root.f) + " 0"
+            + " A " + root.f + " " + root.f + " 0 0 1 " + (root.w - root.b) + " " + root.f
+            + " L " + (root.w - root.b) + " " + (root.b - root.f)
+            + " A " + root.f + " " + root.f + " 0 0 0 " + (root.w - root.b + root.f) + " " + root.b
+            + " L " + (root.w - root.f) + " " + root.b
+            + " A " + root.f + " " + root.f + " 0 0 1 " + root.w + " " + (root.b + root.f)
+            + " L " + root.w + " " + (root.h - root.r)
+            + " A " + root.r + " " + root.r + " 0 0 1 " + (root.w - root.r) + " " + root.h
+            + " L " + root.r + " " + root.h
+            + " A " + root.r + " " + root.r + " 0 0 1 0 " + (root.h - root.r)
+            + " Z";
+    }
 
     VerticalLayout {
         padding: Theme.space-6;
-        padding-right: root.bite + Theme.space-2;
-        spacing: Theme.space-3;
+        padding-right: root.b * 1px + Theme.space-2;
+        spacing: Theme.space-2;
         @children
     }
 
-    // the bite
-    Rectangle {
-        x: parent.width - root.bite;
-        y: 0;
-        width: root.bite;
-        height: root.bite;
-        background: root.notch-bg;
-        border-bottom-left-radius: root.fillet;
-    }
-    // concave fillet left of the bite
-    Rectangle {
-        x: parent.width - root.bite - root.fillet;
-        y: 0;
-        width: root.fillet;
-        height: root.fillet;
-        background: root.notch-bg;
-        Rectangle {
-            x: -1px;
-            y: 0;
-            width: parent.width + 1px;
-            height: parent.height + 1px;
-            background: root.card;
-            border-top-right-radius: root.fillet + 1px;
-        }
-    }
-    // concave fillet below the bite
-    Rectangle {
-        x: parent.width - root.fillet;
-        y: root.bite;
-        width: root.fillet;
-        height: root.fillet;
-        background: root.notch-bg;
-        Rectangle {
-            x: -1px;
-            y: 0;
-            width: parent.width + 1px;
-            height: parent.height + 1px;
-            background: root.card;
-            border-top-right-radius: root.fillet + 1px;
-        }
-    }
     IconButton {
         x: parent.width - self.width;
         y: 0;
         icon: root.icon;
         kind: root.button-kind;
+        label: root.label;
         clicked => { root.action(); }
     }
 }
@@ -576,37 +708,56 @@ export component NotchCard inherits Rectangle {
 export component Field inherits VerticalLayout {
     in property <string> label;
     in property <string> placeholder;
+    in property <string> icon;
     in property <InputType> input-type: InputType.text;
+    in property <TileStyle> on: TileStyle.surface;
     in-out property <string> text;
+    callback edited(string);
+    callback accepted(string);
     spacing: Theme.space-2;
-    Caption { text: root.label; }
+    if root.label != "": Caption { text: root.label; on: root.on; }
     Rectangle {
         height: Theme.control-lg;
-        border-radius: Theme.radius-md;
-        background: Theme.c.surface-muted;
+        border-radius: self.height / 2;
+        background: root.on == TileStyle.muted ? Theme.c.surface : Ink.raised(root.on);
         border-width: input.has-focus ? 2px : 0px;
         border-color: Theme.c.accent-ink;
         HorizontalLayout {
-            padding-left: Theme.space-4;
-            padding-right: Theme.space-4;
-            input := TextInput {
-                text <=> root.text;
-                input-type: root.input-type;
-                vertical-alignment: center;
-                font-size: Type.body;
-                color: Theme.c.ink;
-                selection-background-color: Theme.c.accent;
-                selection-foreground-color: Theme.c.on-accent;
-                single-line: true;
+            padding-left: root.icon != "" ? 14px : Theme.space-5;
+            padding-right: Theme.space-5;
+            spacing: Theme.space-2;
+            if root.icon != "": Icon {
+                data: root.icon;
+                stroke: Theme.c.ink-muted;
+                y: (parent.height - self.height) / 2;
             }
-        }
-        if root.text == "": Text {
-            x: Theme.space-4;
-            text: root.placeholder;
-            font-size: Type.body;
-            color: Theme.c.ink-muted;
-            vertical-alignment: center;
-            height: parent.height;
+            Rectangle {
+                horizontal-stretch: 1;
+                input := TextInput {
+                    width: 100%;
+                    height: 100%;
+                    text <=> root.text;
+                    input-type: root.input-type;
+                    vertical-alignment: center;
+                    font-size: Type.body;
+                    color: Theme.c.ink;
+                    selection-background-color: Theme.c.accent;
+                    selection-foreground-color: Theme.c.on-accent;
+                    single-line: true;
+                    accessible-label: root.label != "" ? root.label : root.placeholder;
+                    edited => { root.edited(self.text); }
+                    accepted => { root.accepted(self.text); }
+                }
+                if root.text == "": Text {
+                    x: 0;
+                    width: 100%;
+                    height: 100%;
+                    text: root.placeholder;
+                    font-size: Type.body;
+                    color: Theme.c.ink-muted;
+                    vertical-alignment: center;
+                }
+            }
         }
     }
 }
@@ -619,5 +770,67 @@ export component ChipScroller inherits Flickable {
     row := HorizontalLayout {
         spacing: Theme.space-2;
         @children
+    }
+}
+
+// Small figure with caption, used in stat grids.
+export component Figure inherits VerticalLayout {
+    // equal columns: let the layout share the width, not the content
+    preferred-width: 1px;
+    horizontal-stretch: 1;
+    in property <string> caption;
+    in property <string> value;
+    in property <string> unit;
+    in property <string> note;
+    in property <TileStyle> on: TileStyle.surface;
+    spacing: 2px;
+    Caption { text: root.caption; on: root.on; }
+    Amount { value: root.value; unit: root.unit; size: Type.metric-sm; on: root.on; }
+    if root.note != "": Caption { text: root.note; on: root.on; }
+}
+
+// Dark glass toast with an optional action, above the dock.
+export component Toast inherits Rectangle {
+    in property <string> text;
+    in property <string> action;
+    callback act();
+    height: 48px;
+    border-radius: 24px;
+    background: Glass.dark;
+    border-width: 1px;
+    border-color: Glass.dark-edge;
+    drop-shadow-blur: 24px;
+    drop-shadow-offset-y: 8px;
+    drop-shadow-color: #00000059;
+    HorizontalLayout {
+        padding-left: Theme.space-5;
+        padding-right: 6px;
+        spacing: Theme.space-3;
+        Text {
+            text: root.text;
+            color: Glass.dark-ink;
+            font-size: Type.label;
+            font-weight: 500;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+            overflow: elide;
+        }
+        if root.action != "": Rectangle {
+            width: act-text.preferred-width + 28px;
+            height: 36px;
+            y: (parent.height - self.height) / 2;
+            border-radius: 18px;
+            background: Theme.c.accent;
+            accessible-role: button;
+            accessible-label: root.action;
+            accessible-action-default => { root.act(); }
+            act-text := Text {
+                text: root.action;
+                color: Theme.c.on-accent;
+                font-size: Type.label;
+                font-weight: 700;
+            }
+            TouchArea { clicked => { root.act(); } }
+        }
     }
 }

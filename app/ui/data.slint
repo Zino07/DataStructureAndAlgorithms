@@ -4,12 +4,19 @@ import { Bar } from "components/bento.slint";
 export { Bar }
 
 export struct Dashboard {
-    today: string,            // "Sat, 31 Oct"
+    today: string,            // "Sun, 18 Oct"
+    clock: string,            // "14:05"
     cycle: string,            // "October 2026"
-    days-left: string,        // "1 day left"
+    days-left: string,        // "14 days left"
     currency: string,
+    has-entries: bool,
+    has-income: bool,
     balance: string,
-    safe-per-day: string,
+    allowance: string,        // daily allowance
+    today-left: string,       // allowance - spent today (absolute value)
+    today-over: bool,         // spent more than the allowance today
+    today-ratio: float,
+    spent-today: string,
     income: string,
     income-delta: string,     // "12%" or ""
     income-up: bool,
@@ -17,19 +24,21 @@ export struct Dashboard {
     expense-delta: string,
     expense-up: bool,         // true when spending went up (shown in red)
     spent-ratio: float,
-    projected: string,        // "On pace for 4,210.00"
+    pace-ratio: float,        // share of the cycle that has passed
+    projected: string,
     savings-rate: string,     // "42%" or "—"
     savings-ratio: float,
     week-total: string,
-    has-data: bool,
 }
 
 export struct TxRow {
     id: int,
     header: bool,             // date separator row
+    transfer: bool,
     title: string,
     meta: string,
     amount: string,
+    time: string,
     income: bool,
     icon: string,
 }
@@ -41,11 +50,16 @@ export struct CategoryItem {
 }
 
 export struct CategoryShare {
+    id: int,
     name: string,
     icon: string,
     amount: string,
     share: float,             // 0..1 of the largest
     percent: string,
+    count: string,            // "12 entries"
+    budget: string,           // "of 500.00" or ""
+    budget-ratio: float,      // spent / budget, -1 without budget
+    over: bool,
 }
 
 export struct AccountItem {
@@ -55,4 +69,69 @@ export struct AccountItem {
     icon: string,
     balance: string,
     negative: bool,
+}
+
+export struct SuggestionItem {
+    title: string,            // "Morning coffee"
+    amount: string,           // "18.00" (keypad text)
+    amount-label: string,     // "18.00"
+    category: int,
+    account: int,
+    icon: string,
+    note: string,
+}
+
+export struct Insight {
+    icon: string,
+    text: string,
+    warning: bool,
+}
+
+export struct BudgetRow {
+    id: int,
+    name: string,
+    icon: string,
+    limit: string,            // keypad text, "" when none
+    spent: string,
+    ratio: float,
+    over: bool,
+}
+
+// Everything on the Stats screen.
+export struct StatsView {
+    range-label: string,
+    // money clock
+    earn-hour: string,
+    earn-minute: string,
+    earn-work-hour: string,
+    burn-hour: string,
+    burn-minute: string,
+    burn-day: string,
+    elapsed: string,          // "17 d 14 h tracked"
+    // totals
+    income: string,
+    expense: string,
+    net: string,
+    net-negative: bool,
+    savings-rate: string,
+    expense-delta: string,
+    expense-up: bool,
+    income-delta: string,
+    income-up: bool,
+    runway: string,           // "41 days" or "—"
+    // habits
+    entries: string,          // "84"
+    entries-per-day: string,  // "4.9 a day"
+    avg: string,
+    median: string,
+    gap: string,              // "every 5 h 10 min"
+    work-cost: string,        // "52 min of work"
+    peak-hour: string,        // "13:00–14:00"
+    peak-day: string,         // "Thursday"
+    night-share: string,      // "18%"
+    weekday-avg: string,
+    weekend-avg: string,
+    no-spend: string,         // "6 days"
+    streak: string,           // "best 3 · now 1"
+    has-data: bool,
 }
