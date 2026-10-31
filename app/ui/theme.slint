@@ -1,5 +1,6 @@
 // Bento Neo tokens. Values mirror tokens.json / tokens.css of the design system.
-// Eight themes: four palettes (lime, solar, ember, lilac) in light and dark.
+// Two styles: Bento (eight solid themes: four palettes in light and dark) and
+// Aurora Glass (dark frosted panels over a blurred aurora tinted by the accent).
 
 export struct Palette {
     canvas: color,
@@ -23,6 +24,9 @@ export global Theme {
     // 0 lime, 1 solar, 2 ember, 3 lilac
     in-out property <int> palette: 0;
     in-out property <bool> dark: false;
+    // Aurora Glass style. Always dark: the glass needs a dark, busy backdrop.
+    in-out property <bool> glass: false;
+    out property <bool> is-dark: dark || glass;
 
     property <[Palette]> themes: [
         // lime-light
@@ -67,10 +71,19 @@ export global Theme {
           positive: #5bd68a, negative: #ff6b6b },
     ];
 
-    out property <Palette> c: themes[Math.clamp(palette, 0, 3) * 2 + (dark ? 1 : 0)];
-
     // Swatches for the palette picker.
     out property <[color]> accents: [#d4ff3a, #ffe53b, #ff7a2f, #c6b3ff];
+    property <color> accent-now: accents[Math.clamp(palette, 0, 3)];
+
+    // Aurora Glass: "surface" fills are light vibrancy fills that sit on glass
+    // or on the aurora; panels themselves are drawn by GlassFill.
+    property <Palette> glass-palette: {
+        canvas: #050607, surface: #ffffff17, surface-muted: #ffffff12, surface-inverse: #f4f4f1,
+        ink: #f7f7f4, ink-muted: #ffffffc4, ink-subtle: #ffffff73, ink-inverse: #111111, line: #ffffff24,
+        accent: accent-now, on-accent: #111111, accent-soft: accent-now.with-alpha(0.16), accent-ink: accent-now,
+        positive: #74e8a2, negative: #ff8080 };
+
+    out property <Palette> c: glass ? glass-palette : themes[Math.clamp(palette, 0, 3) * 2 + (dark ? 1 : 0)];
 
     // Spacing
     out property <length> space-1: 4px;
@@ -114,18 +127,53 @@ export global Type {
     out property <length> micro: 10px;        // chart axes
 }
 
-// Frosted glass. Slint has no backdrop blur, so glass is a dense tint with a
-// light top edge; it is only used where content scrolls underneath.
+// Motion tokens (see docs/MOTION_AND_GLASS_RESEARCH.md). Springs use Apple's
+// duration/bounce model: duration is perceptual, the tail may run longer, so
+// no logic ever waits for an animation. Bounce only follows a gesture with
+// momentum; taps get bounce 0 or a small brisk tail.
+export global Motion {
+    // in-app "Reduce motion": springs become instant, entrances only fade
+    in-out property <bool> reduce: false;
+    out property <duration> smooth: reduce ? 0ms : 450ms;   // spring(0): screens, morphs
+    out property <duration> snappy: reduce ? 0ms : 380ms;   // spring(0.15): indicators, selection
+    out property <duration> press: reduce ? 0ms : 260ms;    // spring(0.2): press scale release
+    out property <duration> quick: reduce ? 120ms : 200ms;  // fades, colour changes
+    out property <duration> stagger: reduce ? 0ms : 40ms;   // between cards entering
+    out property <float> rise: reduce ? 1 : 0.96;           // entering cards start at this scale
+}
+
+// Frosted glass. Slint has no backdrop blur. Aurora Glass draws a blurred
+// copy of the fixed backdrop inside each panel (aligned to the window), plus
+// a tint, a sheen and a lit edge. Bento uses a dense tint with a light edge.
 export global Glass {
     // dark glass for the dock, toasts and sheets (same in light and dark mode)
-    out property <color> dark: #141414d9;
+    out property <color> dark: #141414e6;
     out property <color> dark-edge: #ffffff1f;
     out property <color> dark-ink: #f4f4f1;
     out property <color> dark-muted: #f4f4f1a3;
     // canvas-tinted glass for the top bar
-    out property <color> bar: Theme.c.canvas.with-alpha(0.88);
-    out property <color> bar-edge: Theme.dark ? #ffffff14 : #0000000f;
+    out property <color> bar: Theme.c.canvas.with-alpha(0.94);
+    out property <color> bar-edge: Theme.is-dark ? #ffffff1a : #00000014;
     out property <color> scrim: #00000073;
+
+    // ---- Aurora Glass ----
+    // in-app "Reduce transparency": solid panels, no backdrop showing through
+    in-out property <bool> solid: false;
+    in-out property <image> backdrop;      // full-window aurora with grain
+    in-out property <image> frost;         // heavily blurred copy for panels
+    in-out property <image> grain;         // small noise tile
+    // window size and scroll parallax, set by the window
+    in-out property <length> win-width: 390px;
+    in-out property <length> win-height: 844px;
+    in-out property <length> shift: 0px;
+    out property <length> travel: 80px;    // how far the backdrop can drift
+    // panel tints over the frost (checked for contrast in aurora.rs tests)
+    out property <color> tint: #0a0d10a6;
+    out property <color> tint-hero: #0a0d10a6;
+    out property <color> tint-accent: #0a0d10b3;
+    out property <color> tint-solid: #15181b;
+    out property <brush> edge: @linear-gradient(155deg, #ffffff5c 0%, #ffffff14 38%, #ffffff0a 62%, #ffffff29 100%);
+    out property <brush> sheen: @linear-gradient(170deg, #ffffff1a 0%, #ffffff05 30%, #ffffff00 55%);
 }
 
 // Line icons on a 24 × 24 grid, drawn with a 1.8 stroke and round caps.

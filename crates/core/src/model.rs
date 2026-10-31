@@ -227,6 +227,12 @@ pub struct Settings {
     pub palette: u32,
     pub dark: bool,
     pub weekend: Weekend,
+    /// 0 Bento (solid), 1 Aurora Glass.
+    pub style: u32,
+    /// In-app "Reduce motion": no springs, entrances only fade.
+    pub reduce_motion: bool,
+    /// In-app "Reduce transparency": glass panels become solid.
+    pub solid_glass: bool,
 }
 
 impl Default for Settings {
@@ -237,6 +243,9 @@ impl Default for Settings {
             palette: 0,
             dark: true,
             weekend: Weekend::FriSat,
+            style: 0,
+            reduce_motion: false,
+            solid_glass: false,
         }
     }
 }

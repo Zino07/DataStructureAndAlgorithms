@@ -2,6 +2,7 @@
 
 slint::include_modules!();
 
+mod aurora;
 pub mod demo;
 mod icons;
 
@@ -59,6 +60,8 @@ struct Ctx {
     toast_timer: slint::Timer,
     clock_timer: slint::Timer,
     last_minute: Cell<(NaiveDate, u16)>,
+    /// accent the aurora images were painted for (-1: none yet)
+    aurora_palette: Cell<i32>,
 }
 
 /// Opens (or creates) the database in `data_dir` and builds the window.
@@ -80,6 +83,7 @@ pub fn build(data_dir: &Path) -> Result<AppWindow, Box<dyn Error>> {
         toast_timer: slint::Timer::default(),
         clock_timer: slint::Timer::default(),
         last_minute: Cell::new(now()),
+        aurora_palette: Cell::new(-1),
     });
     wire(&ui, &ctx);
     refresh(&ui, &ctx);
@@ -149,6 +153,10 @@ fn wire(ui: &AppWindow, ctx: &Rc<Ctx>) {
     ui.on_day_label(|days_ago| {
         let today = today();
         day_label(today - chrono::Days::new(days_ago.max(0) as u64), today).into()
+    });
+    ui.on_short_day(|days_ago| {
+        let date = today() - chrono::Days::new(days_ago.max(0) as u64);
+        date.format("%-d %b").to_string().into()
     });
     ui.on_time_label(|minute| time_label(minute.clamp(0, 1439) as u16).into());
 
@@ -422,6 +430,18 @@ fn wire(ui: &AppWindow, ctx: &Rc<Ctx>) {
         let update = update_settings.clone();
         move |c| update(&|s| s.currency = c.to_string())
     });
+    ui.on_style_changed({
+        let update = update_settings.clone();
+        move |v| update(&|s| s.style = v.clamp(0, 1) as u32)
+    });
+    ui.on_reduce_motion_changed({
+        let update = update_settings.clone();
+        move |v| update(&|s| s.reduce_motion = v)
+    });
+    ui.on_solid_glass_changed({
+        let update = update_settings.clone();
+        move |v| update(&|s| s.solid_glass = v)
+    });
 
     ui.on_load_demo({
         let (ctx, weak) = (ctx.clone(), weak.clone());
@@ -630,6 +650,84 @@ fn tx_row(t: &Transaction, today: NaiveDate, with_date: bool) -> TxRow {
     }
 }
 
+/// Full amount, or the compact form when the full one would not fit a
+/// half-width card (more than 10 characters, e.g. "1,234,567.89").
+fn fit(m: Money) -> SharedString {
+    let full = m.format();
+    if full.chars().count() > 10 {
+        m.format_compact().into()
+    } else {
+        full.into()
+    }
+}
+
+/// Chart scale for a set of bar values. One outlier (more than 2.5× the
+/// next largest, with at least four bars) is cut at the top and marked, so it
+/// does not flatten every other bar. Returns (scale, index of the cut bar).
+pub fn bar_scale(values: &[i64]) -> (i64, Option<usize>) {
+    let max = values.iter().copied().max().unwrap_or(0);
+    let nonzero = values.iter().filter(|v| **v > 0).count();
+    if nonzero >= 4 {
+        let top = values.iter().rposition(|v| *v == max);
+        let second = values
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| Some(*i) != top)
+            .map(|(_, v)| *v)
+            .max()
+            .unwrap_or(0);
+        if second > 0 && max > second * 5 / 2 {
+            return (second + second / 7, top);
+        }
+    }
+    (max, None)
+}
+
+/// A round budget suggestion just above what was spent: 10s under 100,
+/// 50s under 1,000, 100s above.
+pub fn suggest_limit(spent: Money) -> Money {
+    let units = spent.0.max(0);
+    let step = if units < 10_000 {
+        1_000
+    } else if units < 100_000 {
+        5_000
+    } else {
+        10_000
+    };
+    Money((units / step + 1) * step)
+}
+
+fn bars(
+    values: &[i64],
+    labels: Vec<SharedString>,
+    tips: impl Fn(usize) -> SharedString,
+    peak: Option<usize>,
+    empty: impl Fn(usize) -> bool,
+) -> Vec<Bar> {
+    let (scale, cut) = bar_scale(values);
+    values
+        .iter()
+        .zip(labels)
+        .enumerate()
+        .map(|(i, (v, label))| Bar {
+            value: if scale > 0 {
+                (*v as f32 / scale as f32).min(1.0)
+            } else {
+                0.0
+            },
+            label,
+            tip: if Some(i) == peak {
+                tips(i)
+            } else {
+                SharedString::new()
+            },
+            highlight: Some(i) == peak,
+            empty: empty(i),
+            over: Some(i) == cut,
+        })
+        .collect()
+}
+
 fn delta(pct: Option<i64>) -> (SharedString, bool) {
     match pct {
         Some(p) => (format!("{}%", p.abs()).into(), p >= 0),
@@ -654,13 +752,29 @@ fn try_refresh_activity(ui: &AppWindow, ctx: &Ctx, today: NaiveDate) -> Result<(
     let query = ctx.query.borrow().clone();
     let mut rows = Vec::new();
     let mut last_date = None;
-    let mut push_header = |rows: &mut Vec<TxRow>, date: NaiveDate| {
+    // per-day totals for the headers: (spent, received)
+    let mut day_totals: std::collections::HashMap<NaiveDate, (Money, Money)> = Default::default();
+    let mut push_header = |rows: &mut Vec<TxRow>,
+                           totals: &std::collections::HashMap<NaiveDate, (Money, Money)>,
+                           date: NaiveDate| {
         if last_date != Some(date) {
             last_date = Some(date);
+            let (spent, earned) = totals.get(&date).copied().unwrap_or_default();
             rows.push(TxRow {
                 id: -1,
                 header: true,
                 title: day_label(date, today).into(),
+                // header rows: amount = spent that day, meta = received
+                amount: if spent.0 > 0 {
+                    format!("−{}", spent.format()).into()
+                } else {
+                    SharedString::new()
+                },
+                meta: if earned.0 > 0 {
+                    format!("+{}", earned.format()).into()
+                } else {
+                    SharedString::new()
+                },
                 ..Default::default()
             });
         }
@@ -679,7 +793,11 @@ fn try_refresh_activity(ui: &AppWindow, ctx: &Ctx, today: NaiveDate) -> Result<(
             })
             .collect();
         for t in &list {
-            push_header(&mut rows, t.date);
+            let e = day_totals.entry(t.date).or_default();
+            e.0 += t.amount;
+        }
+        for t in &list {
+            push_header(&mut rows, &day_totals, t.date);
             rows.push(TxRow {
                 id: t.id as i32,
                 header: false,
@@ -707,7 +825,15 @@ fn try_refresh_activity(ui: &AppWindow, ctx: &Ctx, today: NaiveDate) -> Result<(
         };
         let list = store.search(filter, &query, ACTIVITY_LIMIT)?;
         for t in &list {
-            push_header(&mut rows, t.date);
+            let e = day_totals.entry(t.date).or_default();
+            if t.kind == Kind::Expense {
+                e.0 += t.amount;
+            } else {
+                e.1 += t.amount;
+            }
+        }
+        for t in &list {
+            push_header(&mut rows, &day_totals, t.date);
             rows.push(tx_row(t, today, false));
         }
         if !query.is_empty() {
@@ -758,6 +884,25 @@ fn try_refresh(ui: &AppWindow, ctx: &Ctx) -> Result<(), StoreError> {
     let theme = ui.global::<Theme>();
     theme.set_palette(settings.palette as i32);
     theme.set_dark(settings.dark);
+    let glass_on = settings.style == 1;
+    theme.set_glass(glass_on);
+    ui.global::<Motion>().set_reduce(settings.reduce_motion);
+    let glass = ui.global::<Glass>();
+    glass.set_solid(settings.solid_glass);
+    ui.set_style_index(settings.style as i32);
+    ui.set_reduce_motion(settings.reduce_motion);
+    ui.set_solid_glass(settings.solid_glass);
+    if glass_on && ctx.aurora_palette.get() != settings.palette as i32 {
+        ctx.aurora_palette.set(settings.palette as i32);
+        let img = aurora::render(settings.palette as i32);
+        let image = |bytes: &[u8], w: u32, h: u32| {
+            slint::Image::from_rgba8(
+                slint::SharedPixelBuffer::<slint::Rgba8Pixel>::clone_from_slice(bytes, w, h),
+            )
+        };
+        glass.set_backdrop(image(&img.backdrop, img.width, img.height));
+        glass.set_frost(image(&img.frost, img.frost_width, img.frost_height));
+    }
     ui.set_cycle_day(settings.cycle_start_day as i32);
     ui.set_weekend(if settings.weekend == Weekend::SatSun {
         1
@@ -792,15 +937,17 @@ fn try_refresh(ui: &AppWindow, ctx: &Ctx) -> Result<(), StoreError> {
         today_over: radar.today_left.0 < 0,
         today_ratio: radar.today_ratio(),
         spent_today: radar.spent_today.format().into(),
-        income: radar.income.format_compact().into(),
+        income: fit(radar.income),
         income_delta,
         income_up,
-        expense: radar.expense.format_compact().into(),
+        expense: fit(radar.expense),
         expense_delta,
         expense_up,
         spent_ratio: radar.spent_ratio(),
         pace_ratio: pace.clamp(0.0, 1.0),
-        projected: radar.projected_expense.format_compact().into(),
+        projected: fit(radar.projected_expense),
+        net: fit(radar.income - radar.expense),
+        net_negative: radar.expense > radar.income,
         savings_rate: radar
             .savings_rate()
             .map(|r| format!("{}%", (r * 100.0).round() as i64))
@@ -823,38 +970,22 @@ fn try_refresh(ui: &AppWindow, ctx: &Ctx) -> Result<(), StoreError> {
         .into(),
     );
 
-    let max = radar
-        .last_7_days
+    let week_values: Vec<i64> = radar.last_7_days.iter().map(|(_, m)| m.0).collect();
+    let week_max = week_values.iter().copied().max().unwrap_or(0);
+    let week_peak = week_values
         .iter()
-        .map(|(_, m)| m.0)
-        .max()
-        .unwrap_or(0);
-    let peak = radar
-        .last_7_days
-        .iter()
-        .rposition(|(_, m)| m.0 == max && max > 0);
-    ui.set_week(model(
+        .rposition(|v| *v == week_max && week_max > 0);
+    ui.set_week(model(bars(
+        &week_values,
         radar
             .last_7_days
             .iter()
-            .enumerate()
-            .map(|(i, (date, m))| Bar {
-                value: if max > 0 {
-                    m.0 as f32 / max as f32
-                } else {
-                    0.0
-                },
-                label: date.format("%a").to_string().into(),
-                tip: if Some(i) == peak {
-                    m.format_compact().into()
-                } else {
-                    SharedString::new()
-                },
-                highlight: Some(i) == peak,
-                empty: m.0 == 0,
-            })
+            .map(|(date, _)| date.format("%a").to_string().into())
             .collect(),
-    ));
+        |i| radar.last_7_days[i].1.format_compact().into(),
+        week_peak,
+        |i| week_values[i] == 0,
+    )));
     ui.set_recent(model(
         recent.iter().map(|t| tx_row(t, today, true)).collect(),
     ));
@@ -964,11 +1095,23 @@ fn try_refresh(ui: &AppWindow, ctx: &Ctx) -> Result<(), StoreError> {
     ui.set_expense_suggestions(suggestions(Kind::Expense)?);
     ui.set_income_suggestions(suggestions(Kind::Income)?);
 
+    let balances = store.accounts_with_balances()?;
+    let positive: i64 = balances.iter().map(|a| a.balance.0.max(0)).sum();
     ui.set_accounts(model(
-        store
-            .accounts_with_balances()?
+        balances
             .into_iter()
             .map(|a| AccountItem {
+                share: if positive > 0 {
+                    a.balance.0.max(0) as f32 / positive as f32
+                } else {
+                    0.0
+                },
+                percent: if positive > 0 && a.balance.0 > 0 {
+                    format!("{}%", (a.balance.0 * 100 + positive / 2) / positive)
+                } else {
+                    String::new()
+                }
+                .into(),
                 id: a.account.id as i32,
                 name: a.account.name.into(),
                 kind: a.account.kind.label().into(),
@@ -985,6 +1128,11 @@ fn try_refresh(ui: &AppWindow, ctx: &Ctx) -> Result<(), StoreError> {
         .iter()
         .map(|c| (c.category_id, c.total))
         .collect();
+    let last_cycle: std::collections::HashMap<Id, Money> = store
+        .category_totals(Kind::Expense, radar.period.previous())?
+        .into_iter()
+        .map(|c| (c.category_id, c.total))
+        .collect();
     ui.set_budget_rows(model(
         store
             .categories(Kind::Expense)?
@@ -992,7 +1140,16 @@ fn try_refresh(ui: &AppWindow, ctx: &Ctx) -> Result<(), StoreError> {
             .map(|c| {
                 let limit = limits.get(&c.id).copied();
                 let spent = spent_by_cat.get(&c.id).copied().unwrap_or_default();
+                let before = last_cycle.get(&c.id).copied().filter(|m| m.0 > 0);
+                let suggestion = before.map(suggest_limit);
                 BudgetRow {
+                    pace: pace.clamp(0.0, 1.0),
+                    suggest: suggestion.map(plain_amount).unwrap_or_default().into(),
+                    suggest_label: match (suggestion, before) {
+                        (Some(s), Some(b)) => format!("{} · last cycle {}", s.format(), b.format()),
+                        _ => String::new(),
+                    }
+                    .into(),
                     id: c.id as i32,
                     name: c.name.into(),
                     icon: icons::path(&c.icon).into(),
@@ -1092,33 +1249,24 @@ fn try_refresh(ui: &AppWindow, ctx: &Ctx) -> Result<(), StoreError> {
         has_data: s.expense_count + s.income_count > 0,
     });
 
-    let flow_max = s.buckets.iter().map(|b| b.expense.0).max().unwrap_or(0);
-    let flow_peak = s
-        .buckets
+    let flow_values: Vec<i64> = s.buckets.iter().map(|b| b.expense.0).collect();
+    let flow_max = flow_values.iter().copied().max().unwrap_or(0);
+    let flow_peak = flow_values
         .iter()
-        .rposition(|b| b.expense.0 == flow_max && flow_max > 0);
+        .rposition(|v| *v == flow_max && flow_max > 0);
     let n = s.buckets.len();
-    ui.set_flow(model(
+    ui.set_flow_cut(bar_scale(&flow_values).1.is_some());
+    ui.set_flow(model(bars(
+        &flow_values,
         s.buckets
             .iter()
             .enumerate()
-            .map(|(i, b)| Bar {
-                value: if flow_max > 0 {
-                    b.expense.0 as f32 / flow_max as f32
-                } else {
-                    0.0
-                },
-                label: sparse_label(i, n, b.label.clone()),
-                tip: if Some(i) == flow_peak {
-                    b.expense.format_compact().into()
-                } else {
-                    SharedString::new()
-                },
-                highlight: Some(i) == flow_peak,
-                empty: b.expense.0 == 0 || b.future,
-            })
+            .map(|(i, b)| sparse_label(i, n, b.label.clone()))
             .collect(),
-    ));
+        |i| s.buckets[i].expense.format_compact().into(),
+        flow_peak,
+        |i| s.buckets[i].expense.0 == 0 || s.buckets[i].future,
+    )));
     let hour_max = s.by_hour_count.iter().copied().max().unwrap_or(0);
     ui.set_hours(model(
         (0..24usize)
@@ -1142,6 +1290,7 @@ fn try_refresh(ui: &AppWindow, ctx: &Ctx) -> Result<(), StoreError> {
                     },
                     highlight: Some(h as u8) == s.peak_hour,
                     empty: n == 0,
+                    over: false,
                 }
             })
             .collect(),
@@ -1223,7 +1372,7 @@ fn android_main(app: slint::android::AndroidApp) {
 
 #[cfg(test)]
 mod tests {
-    use super::{edit_amount, plain_amount};
+    use super::{bar_scale, edit_amount, plain_amount, suggest_limit};
     use income_radar_core::Money;
 
     #[test]
@@ -1245,5 +1394,29 @@ mod tests {
         }
         assert_eq!(plain_amount(Money(1250)), "12.50");
         assert_eq!(plain_amount(Money(1200)), "12");
+    }
+
+    #[test]
+    fn one_outlier_is_cut_and_marked() {
+        // rent day among small days: scale follows the rest
+        let (scale, cut) = bar_scale(&[40, 55, 3000, 60, 35, 0, 50]);
+        assert_eq!(cut, Some(2));
+        assert!((60..80).contains(&scale));
+        // even spending: no cut, the tallest bar is the scale
+        assert_eq!(bar_scale(&[40, 55, 70, 60, 35]), (70, None));
+        // too few bars to call anything an outlier
+        assert_eq!(bar_scale(&[0, 0, 900, 10]), (900, None));
+        assert_eq!(bar_scale(&[]), (0, None));
+    }
+
+    #[test]
+    fn budget_suggestions_are_round_and_above_spending() {
+        assert_eq!(suggest_limit(Money(4_250)), Money(5_000));
+        assert_eq!(suggest_limit(Money(43_210)), Money(45_000));
+        assert_eq!(suggest_limit(Money(45_000)), Money(50_000));
+        assert_eq!(suggest_limit(Money(123_456)), Money(130_000));
+        for m in [1, 999, 10_000, 99_999, 1_000_000] {
+            assert!(suggest_limit(Money(m)).0 > m);
+        }
     }
 }

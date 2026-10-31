@@ -1,18 +1,39 @@
 // Bento Neo components: tiles, notch card, pills, icon buttons, chips, badges,
 // progress, pill bars, dot matrix, list rows, segmented nav, glass dock.
+// Every component also renders the Aurora Glass style (Theme.glass).
 
-import { Theme, Type, Icons, Glass } from "../theme.slint";
+import { Theme, Type, Icons, Glass, Motion } from "../theme.slint";
+
+// Where the next morph transition starts: the window rectangle of the control
+// that was tapped. Whoever opens a morphing page sets it first.
+export global Morph {
+    in-out property <length> x: 0px;
+    in-out property <length> y: 0px;
+    in-out property <length> w: 0px;
+    in-out property <length> h: 0px;
+    in-out property <length> r: 0px;
+    in-out property <color> fill: transparent;
+    public function from(x: length, y: length, w: length, h: length, r: length, fill: color) {
+        self.x = x;
+        self.y = y;
+        self.w = w;
+        self.h = h;
+        self.r = r;
+        self.fill = fill;
+    }
+}
 
 export enum TileStyle { surface, inverse, accent, soft, muted }
 export enum ButtonStyle { inverse, accent, ghost, danger }
 export enum IconButtonStyle { surface, inverse, accent, muted, outline, glass }
 
 export struct Bar {
-    value: float,      // 0..1 of the tallest bar
+    value: float,      // 0..1 of the chart scale
     label: string,     // axis label ("" hides it)
     tip: string,       // value bubble text for the highlighted bar
     highlight: bool,
     empty: bool,
+    over: bool,        // taller than the capped scale: drawn full height with a mark
 }
 
 export component Icon inherits Path {
@@ -33,16 +54,19 @@ export component Icon inherits Path {
 // Colours for content that sits on a given tile style.
 export global Ink {
     public pure function fg(style: TileStyle) -> color {
+        if Theme.glass { return Theme.c.ink; }
         if style == TileStyle.inverse { return Theme.c.ink-inverse; }
         if style == TileStyle.accent { return Theme.c.on-accent; }
         return Theme.c.ink;
     }
     public pure function muted(style: TileStyle) -> color {
+        if Theme.glass { return Theme.c.ink-muted; }
         if style == TileStyle.inverse { return Theme.c.ink-inverse.with-alpha(0.64); }
         if style == TileStyle.accent { return Theme.c.on-accent.with-alpha(0.7); }
         return Theme.c.ink-muted;
     }
     public pure function bg(style: TileStyle) -> color {
+        if Theme.glass { return transparent; }
         if style == TileStyle.inverse { return Theme.c.surface-inverse; }
         if style == TileStyle.accent { return Theme.c.accent; }
         if style == TileStyle.soft { return Theme.c.accent-soft; }
@@ -51,11 +75,77 @@ export global Ink {
     }
     // A fill that stays visible on top of the given tile.
     public pure function raised(style: TileStyle) -> color {
+        if Theme.glass { return #ffffff14; }
         if style == TileStyle.inverse { return Theme.c.ink-inverse.with-alpha(0.12); }
         if style == TileStyle.accent { return Theme.c.on-accent.with-alpha(0.10); }
         if style == TileStyle.soft { return Theme.c.surface; }
         return Theme.c.surface-muted;
     }
+    // A faint track for charts and progress on the given tile.
+    public pure function track(style: TileStyle) -> color {
+        if Theme.glass { return #ffffff17; }
+        if style == TileStyle.inverse { return Theme.c.ink-inverse.with-alpha(0.12); }
+        if style == TileStyle.accent { return Theme.c.on-accent.with-alpha(0.12); }
+        if style == TileStyle.soft { return Theme.c.surface.with-alpha(0.7); }
+        return Theme.c.surface-muted;
+    }
+    // The strong fill (bars, progress) on the given tile.
+    public pure function strong(style: TileStyle) -> color {
+        if Theme.glass { return Theme.c.ink; }
+        if style == TileStyle.inverse { return Theme.c.ink-inverse; }
+        if style == TileStyle.accent { return Theme.c.on-accent; }
+        return Theme.c.surface-inverse;
+    }
+}
+
+// Frosted panel background, drawn as the first child of a panel and filling
+// it. The blurred backdrop is placed at window coordinates, so the panel shows
+// exactly the part of the aurora that lies behind it, frosted.
+export component GlassFill inherits Rectangle {
+    in property <color> tint: Glass.tint;
+    in property <color> wash: transparent;   // colour over the tint (accent panels)
+    in property <color> glow: transparent;   // light blooming from the top-left
+    in property <bool> edge: true;
+    clip: true;
+    if !Glass.solid: Image {
+        x: -root.absolute-position.x;
+        y: -root.absolute-position.y - Glass.shift;
+        width: Glass.win-width;
+        height: Glass.win-height + Glass.travel;
+        source: Glass.frost;
+        image-fit: fill;
+    }
+    Rectangle { background: Glass.solid ? Glass.tint-solid : root.tint; }
+    if root.wash != transparent: Rectangle { background: root.wash; }
+    if root.glow != transparent: Rectangle {
+        x: -parent.width * 0.4;
+        y: -parent.width * 0.62;
+        width: parent.width * 1.3;
+        height: self.width;
+        background: @radial-gradient(circle, root.glow 0%, root.glow.with-alpha(0) 68%);
+    }
+    Rectangle { background: Glass.sheen; }
+    if root.edge: Rectangle {
+        border-radius: root.border-radius;
+        border-width: 1px;
+        border-color: Glass.edge;
+    }
+}
+
+// Light that blooms under the finger on glass controls and fades on release.
+export component TouchGlow inherits Rectangle {
+    in property <bool> active;
+    in property <length> px;
+    in property <length> py;
+    in property <length> radius: 64px;
+    in property <color> tone: #ffffff;
+    x: root.px - root.radius;
+    y: root.py - root.radius;
+    width: root.radius * 2;
+    height: self.width;
+    background: @radial-gradient(circle, root.tone.with-alpha(0.26) 0%, root.tone.with-alpha(0.08) 40%, root.tone.with-alpha(0) 70%);
+    opacity: root.active ? 1 : 0;
+    animate opacity { duration: root.active ? 60ms : 420ms; easing: ease-out; }
 }
 
 export component Caption inherits Text {
@@ -92,7 +182,9 @@ export component Amount inherits HorizontalLayout {
     in property <TileStyle> on: TileStyle.surface;
     in property <length> size: Type.metric-md;
     in property <color> color: Ink.fg(on);
-    property <int> chars: value.character-count;
+    // amounts shown side by side pass the longest length so they match
+    in property <int> fit-chars: value.character-count;
+    property <int> chars: fit-chars;
     property <length> fitted: chars > 12 ? size * 0.66 : chars > 10 ? size * 0.76 : chars > 8 ? size * 0.88 : size;
     spacing: 6px;
     alignment: start;
@@ -144,9 +236,30 @@ export component Tile inherits Rectangle {
     in property <length> pad: Theme.space-6;
     in property <length> inner-spacing: Theme.space-4;
     in property <bool> small: false;
+    // position in the entrance stagger (0 = first)
+    in property <int> order: 0;
+    property <bool> shown: false;
+    init => { self.shown = true; }
     border-radius: small ? Theme.radius-md : Theme.radius-lg;
     background: Ink.bg(style);
     clip: true;
+    opacity: shown ? 1 : 0;
+    transform-scale: shown ? 1 : Motion.rise;
+    animate opacity { duration: Motion.quick * 1.6; delay: Motion.stagger * root.order; easing: ease-out; }
+    animate transform-scale { duration: Motion.smooth; delay: Motion.stagger * root.order; easing: spring(0); }
+    if Theme.glass: GlassFill {
+        width: 100%;
+        height: 100%;
+        border-radius: root.border-radius;
+        tint: root.style == TileStyle.inverse ? Glass.tint-hero
+            : root.style == TileStyle.accent ? Glass.tint-accent
+            : Glass.tint;
+        // kept low: brighter colour fails 4.5:1 for captions (aurora.rs tests)
+        wash: root.style == TileStyle.accent ? Theme.c.accent.with-alpha(0.12)
+            : root.style == TileStyle.soft ? Theme.c.accent.with-alpha(0.06)
+            : transparent;
+        glow: root.style == TileStyle.inverse ? Theme.c.accent.with-alpha(0.08) : transparent;
+    }
     VerticalLayout {
         padding: small ? Theme.space-4 : root.pad;
         spacing: root.inner-spacing;
@@ -172,22 +285,27 @@ export component IconButton inherits Rectangle {
     width: small ? Theme.control-md : Theme.control-lg;
     height: self.width;
     border-radius: self.width / 2;
-    background: kind == IconButtonStyle.inverse ? Theme.c.surface-inverse
+    clip: Theme.glass;
+    // disabled: an empty outlined circle with a faint icon, not a faded fill
+    background: !enabled ? transparent
+        : kind == IconButtonStyle.inverse ? Theme.c.surface-inverse
         : kind == IconButtonStyle.accent ? Theme.c.accent
         : kind == IconButtonStyle.muted ? Theme.c.surface-muted
         : kind == IconButtonStyle.outline ? transparent
         : kind == IconButtonStyle.glass ? Glass.dark
         : Theme.c.surface;
-    border-width: kind == IconButtonStyle.outline || kind == IconButtonStyle.glass ? 1px : 0px;
-    border-color: kind == IconButtonStyle.glass ? Glass.dark-edge : outline-color.with-alpha(0.35);
-    opacity: enabled ? 1 : 0.35;
-    transform-scale-x: ta.pressed ? 94% : 100%;
-    transform-scale-y: self.transform-scale-x;
-    animate transform-scale-x { duration: 100ms; easing: ease-out; }
+    border-width: !enabled || kind == IconButtonStyle.outline || kind == IconButtonStyle.glass ? 1px : 0px;
+    border-color: !enabled ? Theme.c.line
+        : kind == IconButtonStyle.glass ? Glass.dark-edge : outline-color.with-alpha(0.35);
+    transform-scale: ta.pressed ? 0.92 : 1;
+    animate transform-scale { duration: Motion.press; easing: spring(0.2); }
+    animate background { duration: Motion.quick; }
 
+    if Theme.glass: TouchGlow { active: ta.pressed; px: ta.mouse-x; py: ta.mouse-y; radius: 40px; }
     Icon {
         data: root.icon;
-        stroke: kind == IconButtonStyle.inverse ? Theme.c.ink-inverse
+        stroke: !root.enabled ? Theme.c.ink-subtle
+            : kind == IconButtonStyle.inverse ? Theme.c.ink-inverse
             : kind == IconButtonStyle.accent ? Theme.c.on-accent
             : kind == IconButtonStyle.outline ? root.outline-color
             : kind == IconButtonStyle.glass ? Glass.dark-ink
@@ -228,12 +346,21 @@ export component PillButton inherits Rectangle {
         : kind == ButtonStyle.danger ? Theme.c.negative
         : Theme.c.surface-inverse;
     border-width: kind == ButtonStyle.ghost ? 1px : 0px;
-    border-color: on == TileStyle.inverse ? Theme.c.ink-inverse.with-alpha(0.3) : Theme.c.line;
+    border-color: on == TileStyle.inverse && !Theme.glass ? Theme.c.ink-inverse.with-alpha(0.3) : Theme.c.line;
     opacity: enabled ? 1 : 0.4;
-    transform-scale-x: ta.pressed ? 98% : 100%;
-    transform-scale-y: self.transform-scale-x;
-    animate transform-scale-x { duration: 100ms; easing: ease-out; }
+    clip: Theme.glass;
+    transform-scale: ta.pressed ? 0.97 : 1;
+    animate transform-scale { duration: Motion.press; easing: spring(0.2); }
+    // the primary action glows softly on glass
+    drop-shadow-blur: Theme.glass && kind == ButtonStyle.accent ? 24px : 0px;
+    drop-shadow-color: Theme.c.accent.with-alpha(0.35);
 
+    if Theme.glass: TouchGlow {
+        active: ta.pressed;
+        px: ta.mouse-x;
+        py: ta.mouse-y;
+        tone: kind == ButtonStyle.accent ? #ffffff : Theme.c.accent;
+    }
     lay := HorizontalLayout {
         padding-left: small ? Theme.space-4 : Theme.space-6;
         padding-right: self.padding-left;
@@ -281,6 +408,7 @@ export component Chip inherits Rectangle {
     height: Theme.control-md;
     min-width: lay.preferred-width;
     border-radius: self.height / 2;
+    clip: Theme.glass;
     background: active ? Theme.c.surface-inverse
         : accent ? Theme.c.accent
         : outline ? transparent
@@ -288,7 +416,11 @@ export component Chip inherits Rectangle {
         : Ink.raised(on);
     border-width: outline && !active ? 1px : 0px;
     border-color: Theme.c.line;
-    animate background { duration: 180ms; }
+    animate background { duration: Motion.quick; }
+    transform-scale: ta.pressed ? 0.95 : 1;
+    animate transform-scale { duration: Motion.press; easing: spring(0.2); }
+
+    if Theme.glass && !root.active: TouchGlow { active: ta.pressed; px: ta.mouse-x; py: ta.mouse-y; radius: 48px; }
 
     lay := HorizontalLayout {
         padding-left: root.icon != "" || root.swatch != transparent ? 12px : Theme.space-4;
@@ -312,11 +444,59 @@ export component Chip inherits Rectangle {
             text: root.text;
             color: root.fg;
             font-size: Type.label;
-            font-weight: 500;
+            font-weight: root.active ? 600 : 500;
             vertical-alignment: center;
         }
     }
-    TouchArea { clicked => { root.clicked(); } }
+    ta := TouchArea { clicked => { root.clicked(); } }
+}
+
+// Square category button: icon above the name, four to a row.
+export component CategoryTile inherits Rectangle {
+    in property <string> name;
+    in property <string> icon;
+    in property <bool> active;
+    callback clicked;
+    accessible-role: button;
+    accessible-label: root.name;
+    accessible-checkable: true;
+    accessible-checked: root.active;
+    accessible-action-default => { root.clicked(); }
+    // equal columns whatever the name length
+    horizontal-stretch: 1;
+    preferred-width: 1px;
+    height: 68px;
+    border-radius: Theme.radius-sm;
+    clip: true;
+    background: active ? Theme.c.surface-inverse : Theme.c.surface;
+    border-width: Theme.glass && !active ? 1px : 0px;
+    border-color: #ffffff14;
+    animate background { duration: Motion.quick; }
+    transform-scale: ta.pressed ? 0.94 : 1;
+    animate transform-scale { duration: Motion.press; easing: spring(0.2); }
+    if Theme.glass && !root.active: TouchGlow { active: ta.pressed; px: ta.mouse-x; py: ta.mouse-y; radius: 48px; }
+    VerticalLayout {
+        padding: 6px;
+        spacing: 5px;
+        alignment: center;
+        HorizontalLayout {
+            alignment: center;
+            Icon {
+                data: root.icon;
+                size: 22px;
+                stroke: root.active ? Theme.c.ink-inverse : Theme.c.ink;
+            }
+        }
+        Text {
+            text: root.name;
+            font-size: 11px;
+            font-weight: 600;
+            horizontal-alignment: center;
+            overflow: elide;
+            color: root.active ? Theme.c.ink-inverse : Theme.c.ink;
+        }
+    }
+    ta := TouchArea { clicked => { root.clicked(); } }
 }
 
 // Delta badge with an arrow; colour is never the only signal.
@@ -326,6 +506,7 @@ export component Badge inherits Rectangle {
     // colour follows meaning, not direction: spending up is bad
     in property <bool> bad: !self.up;
     in property <bool> neutral: false;
+    horizontal-stretch: 0;
     height: 22px;
     min-width: lay.preferred-width;
     border-radius: 11px;
@@ -354,19 +535,23 @@ export component Badge inherits Rectangle {
 
 export component Progress inherits Rectangle {
     in property <float> value; // 0..1
-    in property <color> track: Theme.c.surface-muted;
+    in property <color> track: Theme.glass ? #ffffff17 : Theme.c.surface-muted;
     in property <color> fill: Theme.c.accent;
     in property <float> marker: -1; // optional pace marker 0..1
-    height: 8px;
-    border-radius: 4px;
+    in property <length> thickness: 8px;
+    property <bool> shown: false;
+    init => { self.shown = true; }
+    height: thickness;
+    border-radius: self.height / 2;
     background: track;
     Rectangle {
         x: 0;
-        width: Math.max(root.value > 0 ? root.height : 0, parent.width * Math.clamp(root.value, 0, 1));
+        // fills from the left when it appears, then follows the value
+        width: !root.shown ? 0px : Math.max(root.value > 0 ? root.height : 0, parent.width * Math.clamp(root.value, 0, 1));
         height: parent.height;
         border-radius: parent.border-radius;
         background: root.fill;
-        animate width { duration: 300ms; easing: ease-out; }
+        animate width { duration: Motion.smooth * 1.3; easing: spring(0); }
     }
     if root.marker >= 0: Rectangle {
         x: parent.width * Math.clamp(root.marker, 0, 1) - 1px;
@@ -379,35 +564,60 @@ export component Progress inherits Rectangle {
 }
 
 // Pill bar chart: base bars, one highlighted bar with a value bubble, empty bars muted.
+// Every slot has a faint full-height track, so an empty day reads as empty
+// and a small amount as a short bar. Bars grow from the baseline on entry.
 export component Bars inherits VerticalLayout {
     in property <[Bar]> bars;
     in property <length> chart-height: 120px;
     in property <length> gap: 8px;
     in property <length> max-bar: 36px;
-    in property <color> base: Theme.c.surface-inverse;
-    in property <color> empty: Theme.c.surface-muted;
+    in property <color> base: Theme.glass ? Theme.c.ink : Theme.c.surface-inverse;
+    in property <color> track: Theme.glass ? #ffffff12 : Theme.c.surface-muted;
     in property <color> label-color: Theme.c.ink-muted;
-    in property <color> tip-bg: Theme.c.surface;
+    in property <color> tip-bg: Theme.glass ? #ffffff26 : Theme.c.surface;
     in property <color> tip-fg: Theme.c.ink;
+    property <bool> shown: false;
+    init => { self.shown = true; }
     spacing: Theme.space-2;
 
     row := HorizontalLayout {
         height: root.chart-height + 30px;
         spacing: root.gap;
-        for bar in root.bars: Rectangle {
+        for bar[i] in root.bars: Rectangle {
+            property <length> bw: Math.min(self.width, root.max-bar);
+            property <length> fill-h: bar.empty ? 0px : Math.max(Math.min(bw, 6px), root.chart-height * Math.min(bar.value, 1));
+            // track
             Rectangle {
-                property <length> h: bar.empty ? Math.min(self.width, 8px) : Math.max(Math.min(self.width, 12px), root.chart-height * bar.value);
-                width: Math.min(parent.width, root.max-bar);
-                height: h;
+                width: parent.bw;
+                height: root.chart-height;
+                x: (parent.width - self.width) / 2;
+                y: parent.height - self.height;
+                border-radius: self.width / 2;
+                background: root.track;
+            }
+            // value
+            Rectangle {
+                width: parent.bw;
+                height: root.shown ? parent.fill-h : 0px;
                 x: (parent.width - self.width) / 2;
                 y: parent.height - self.height;
                 border-radius: Math.min(self.width, self.height) / 2;
-                background: bar.highlight ? Theme.c.accent : bar.empty ? root.empty : root.base;
-                animate height { duration: 300ms; easing: ease-out; }
+                background: bar.highlight ? Theme.c.accent : root.base;
+                animate height { duration: Motion.smooth * 1.2; delay: Motion.stagger * 0.5 * i; easing: spring(0.1); }
+            }
+            // off-scale: the bar is cut at the top of the chart; a notch says so
+            if bar.over && !bar.empty: Rectangle {
+                width: parent.bw + 2px;
+                height: 3px;
+                x: (parent.width - self.width) / 2;
+                y: parent.height - root.chart-height + 9px;
+                // a gap in the tile colour (dark on glass)
+                background: Theme.glass ? #101417 : root.tip-bg.with-alpha(1);
+                opacity: root.shown ? 1 : 0;
             }
             if bar.highlight && bar.tip != "": Rectangle {
-                property <length> bar-h: Math.max(12px, root.chart-height * bar.value);
-                y: parent.height - bar-h - self.height - 6px;
+                property <length> bar-h: Math.max(6px, root.chart-height * Math.min(bar.value, 1));
+                y: Math.max(0px, parent.height - bar-h - self.height - 6px);
                 // keep the bubble inside the chart
                 x: Math.clamp((parent.width - self.width) / 2, -parent.x, row.width - parent.x - self.width);
                 height: 24px;
@@ -499,8 +709,11 @@ export component ListRow inherits Rectangle {
 
     height: 60px;
     border-radius: Theme.radius-md;
+    clip: Theme.glass;
     background: selected ? Theme.c.surface-muted : ta.pressed ? Theme.c.surface-muted.with-alpha(0.6) : transparent;
-    animate background { duration: 150ms; }
+    animate background { duration: Motion.quick; }
+
+    if Theme.glass: TouchGlow { active: ta.pressed; px: ta.mouse-x; py: ta.mouse-y; radius: 80px; }
 
     HorizontalLayout {
         padding-left: root.selected ? Theme.space-3 : 0px;
@@ -554,43 +767,63 @@ export component ListRow inherits Rectangle {
             }
         }
     }
-    ta := TouchArea { clicked => { root.clicked(); } }
+    ta := TouchArea {
+        clicked => {
+            // a row can grow into the editor: remember where it is
+            Morph.from(root.absolute-position.x, root.absolute-position.y, root.width, root.height,
+                Theme.radius-md, Theme.glass ? #1a1f22 : Theme.c.surface);
+            root.clicked();
+        }
+    }
 }
 
-// Segmented pill nav. Active item is the black pill.
+// Segmented pill nav. The active pill glides between items on a spring.
 export component PillNav inherits Rectangle {
     in property <[string]> items;
     in-out property <int> current: 0;
     in property <TileStyle> on: TileStyle.muted;
     callback changed(int);
+    property <length> item-w: (self.width - 12px - (root.items.length - 1) * Theme.space-1) / Math.max(1, root.items.length);
     height: Theme.control-md + 12px;
     border-radius: self.height / 2;
-    background: on == TileStyle.muted ? Theme.c.surface : Ink.raised(on);
-    HorizontalLayout {
-        padding: 6px;
-        spacing: Theme.space-1;
-        for item[i] in root.items: Rectangle {
-            accessible-role: tab;
-            accessible-label: item;
-            accessible-item-selected: i == root.current;
-            accessible-action-default => {
+    background: Theme.glass ? #ffffff14 : on == TileStyle.muted ? Theme.c.surface : Ink.raised(on);
+    border-width: Theme.glass ? 1px : 0px;
+    border-color: #ffffff14;
+    // the gliding thumb
+    if root.current >= 0 && root.current < root.items.length: Rectangle {
+        x: 6px + root.current * (root.item-w + Theme.space-1);
+        y: 6px;
+        width: root.item-w;
+        height: parent.height - 12px;
+        border-radius: self.height / 2;
+        background: Theme.c.surface-inverse;
+        animate x { duration: Motion.snappy; easing: spring(0.15); }
+    }
+    // items are placed by hand (not in a layout) so each gets exactly the
+    // slot the thumb glides to, whatever the label length
+    for item[i] in root.items: Rectangle {
+        x: 6px + i * (root.item-w + Theme.space-1);
+        y: 6px;
+        width: root.item-w;
+        height: parent.height - 12px;
+        accessible-role: tab;
+        accessible-label: item;
+        accessible-item-selected: i == root.current;
+        accessible-action-default => {
+            root.current = i;
+            root.changed(i);
+        }
+        Text {
+            text: item;
+            font-size: Type.label;
+            font-weight: i == root.current ? 600 : 500;
+            color: i == root.current ? Theme.c.ink-inverse : Theme.c.ink-muted;
+            animate color { duration: Motion.quick; }
+        }
+        TouchArea {
+            clicked => {
                 root.current = i;
                 root.changed(i);
-            }
-            border-radius: self.height / 2;
-            background: i == root.current ? Theme.c.surface-inverse : transparent;
-            animate background { duration: 180ms; }
-            Text {
-                text: item;
-                font-size: Type.label;
-                font-weight: i == root.current ? 600 : 500;
-                color: i == root.current ? Theme.c.ink-inverse : Theme.c.ink-muted;
-            }
-            TouchArea {
-                clicked => {
-                    root.current = i;
-                    root.changed(i);
-                }
             }
         }
     }
@@ -601,27 +834,53 @@ export struct DockItem {
     label: string,
 }
 
-// Floating dark-glass pill navigation, bottom centre.
+// Floating dark-glass pill navigation, bottom centre. The accent disc glides
+// to the current item.
 export component Dock inherits Rectangle {
     in property <[DockItem]> items;
     in property <int> current: 0;
     callback selected(int);
+    property <length> slot: Theme.control-lg + 6px;
     height: Theme.control-lg + 16px;
     width: lay.preferred-width;
     border-radius: self.height / 2;
-    background: Glass.dark;
-    border-width: 1px;
+    // rounded clip for the glass image (the shadow is drawn outside it)
+    clip: Theme.glass;
+    background: Theme.glass ? transparent : Glass.dark;
+    border-width: Theme.glass ? 0px : 1px;
     border-color: Glass.dark-edge;
     drop-shadow-blur: 32px;
     drop-shadow-offset-y: 12px;
-    drop-shadow-color: #00000059;
+    drop-shadow-color: Theme.glass ? #000000a0 : #00000059;
+    if Theme.glass: GlassFill {
+        width: 100%;
+        height: 100%;
+        border-radius: root.border-radius;
+        tint: #0a0d10cc;
+    }
     // light catching the top edge of the glass
-    Rectangle {
+    if !Theme.glass: Rectangle {
         y: 1px;
         x: parent.height / 2;
         width: parent.width - parent.height;
         height: 1px;
         background: @linear-gradient(90deg, #ffffff00 0%, #ffffff33 50%, #ffffff00 100%);
+    }
+    // gliding accent disc
+    Rectangle {
+        x: 8px + Math.max(0, root.current) * root.slot;
+        y: 8px;
+        width: Theme.control-lg;
+        height: Theme.control-lg;
+        border-radius: self.width / 2;
+        background: Theme.c.accent;
+        opacity: root.current >= 0 ? 1 : 0;
+        transform-scale: root.current >= 0 ? 1 : 0.6;
+        drop-shadow-blur: Theme.glass ? 16px : 0px;
+        drop-shadow-color: Theme.c.accent.with-alpha(0.45);
+        animate x { duration: Motion.snappy; easing: spring(0.15); }
+        animate opacity { duration: Motion.quick; }
+        animate transform-scale { duration: Motion.snappy; easing: spring(0.15); }
     }
     lay := HorizontalLayout {
         padding: 8px;
@@ -630,17 +889,28 @@ export component Dock inherits Rectangle {
             width: Theme.control-lg;
             height: Theme.control-lg;
             border-radius: self.width / 2;
-            background: i == root.current ? Theme.c.accent : ta.pressed ? #ffffff14 : transparent;
+            clip: true;
+            background: i != root.current && ta.pressed ? #ffffff14 : transparent;
             accessible-role: tab;
             accessible-label: item.label;
             accessible-item-selected: i == root.current;
             accessible-action-default => { root.selected(i); }
-            animate background { duration: 180ms; }
+            animate background { duration: Motion.quick; }
+            transform-scale: ta.pressed ? 0.9 : 1;
+            animate transform-scale { duration: Motion.press; easing: spring(0.2); }
+            if Theme.glass: TouchGlow { active: ta.pressed; px: ta.mouse-x; py: ta.mouse-y; radius: 36px; }
             Icon {
                 data: item.icon;
                 stroke: i == root.current ? Theme.c.on-accent : Glass.dark-ink;
+                animate stroke { duration: Motion.quick; }
             }
-            ta := TouchArea { clicked => { root.selected(i); } }
+            ta := TouchArea {
+                clicked => {
+                    Morph.from(self.absolute-position.x, self.absolute-position.y, self.width, self.height,
+                        self.width / 2, Theme.c.accent);
+                    root.selected(i);
+                }
+            }
         }
     }
 }
@@ -659,6 +929,13 @@ export component NotchCard inherits Rectangle {
     property <float> r: 28;   // card radius
     property <float> b: 56;   // bite: 48px button + 8px clearance
     property <float> f: 16;   // fillet radius
+    in property <int> order: 0;
+    property <bool> shown: false;
+    init => { self.shown = true; }
+    opacity: shown ? 1 : 0;
+    transform-scale: shown ? 1 : Motion.rise;
+    animate opacity { duration: Motion.quick * 1.6; delay: Motion.stagger * root.order; easing: ease-out; }
+    animate transform-scale { duration: Motion.smooth; delay: Motion.stagger * root.order; easing: spring(0); }
 
     Path {
         x: 0;
@@ -669,9 +946,12 @@ export component NotchCard inherits Rectangle {
         viewbox-y: 0;
         viewbox-width: root.w;
         viewbox-height: root.h;
-        fill: Ink.bg(root.style);
-        stroke: transparent;
-        stroke-width: 0;
+        fill: !Theme.glass ? Ink.bg(root.style)
+            : Glass.solid ? Glass.tint-solid
+            : root.style == TileStyle.accent ? @linear-gradient(140deg, Theme.c.accent.mix(#0a0d10, 0.16).with-alpha(0.85) 0%, #0a0d10c4 60%, #0a0d10c4 100%)
+            : Glass.tint;
+        stroke: Theme.glass ? Glass.edge : transparent;
+        stroke-width: Theme.glass ? 1px : 0;
         commands: "M 0 " + root.r
             + " A " + root.r + " " + root.r + " 0 0 1 " + root.r + " 0"
             + " L " + (root.w - root.b - root.f) + " 0"
@@ -694,13 +974,17 @@ export component NotchCard inherits Rectangle {
         @children
     }
 
-    IconButton {
+    btn := IconButton {
         x: parent.width - self.width;
         y: 0;
         icon: root.icon;
         kind: root.button-kind;
         label: root.label;
-        clicked => { root.action(); }
+        clicked => {
+            Morph.from(self.absolute-position.x, self.absolute-position.y, self.width, self.height,
+                self.width / 2, Theme.glass ? Theme.c.accent : Theme.c.surface-inverse);
+            root.action();
+        }
     }
 }
 
@@ -720,8 +1004,8 @@ export component Field inherits VerticalLayout {
         height: Theme.control-lg;
         border-radius: self.height / 2;
         background: root.on == TileStyle.muted ? Theme.c.surface : Ink.raised(root.on);
-        border-width: input.has-focus ? 2px : 0px;
-        border-color: Theme.c.accent-ink;
+        border-width: input.has-focus ? 2px : Theme.glass ? 1px : 0px;
+        border-color: input.has-focus ? Theme.c.accent-ink : #ffffff14;
         HorizontalLayout {
             padding-left: root.icon != "" ? 14px : Theme.space-5;
             padding-right: Theme.space-5;
@@ -796,12 +1080,26 @@ export component Toast inherits Rectangle {
     callback act();
     height: 48px;
     border-radius: 24px;
-    background: Glass.dark;
-    border-width: 1px;
+    clip: Theme.glass;
+    background: Theme.glass ? transparent : Glass.dark;
+    border-width: Theme.glass ? 0px : 1px;
     border-color: Glass.dark-edge;
     drop-shadow-blur: 24px;
     drop-shadow-offset-y: 8px;
-    drop-shadow-color: #00000059;
+    drop-shadow-color: #00000070;
+    // slides up and fades in when it appears
+    property <bool> shown: false;
+    init => { self.shown = true; }
+    opacity: shown ? 1 : 0;
+    transform-scale: shown ? 1 : 0.92;
+    animate opacity { duration: Motion.quick; }
+    animate transform-scale { duration: Motion.snappy; easing: spring(0.15); }
+    if Theme.glass: GlassFill {
+        width: 100%;
+        height: 100%;
+        border-radius: root.border-radius;
+        tint: #0a0d10d9;
+    }
     HorizontalLayout {
         padding-left: Theme.space-5;
         padding-right: 6px;
@@ -833,4 +1131,84 @@ export component Toast inherits Rectangle {
             TouchArea { clicked => { root.act(); } }
         }
     }
+}
+
+// One card header everywhere: optional icon, title, then one badge and/or one
+// round action on the right; always the height of a small button.
+export component CardHeader inherits HorizontalLayout {
+    in property <string> title;
+    in property <string> icon;
+    in property <TileStyle> on: TileStyle.surface;
+    in property <string> badge;
+    in property <bool> badge-up: true;
+    in property <bool> badge-bad: !self.badge-up;
+    in property <string> action-icon;
+    in property <string> action-label;
+    callback action();
+    height: Theme.control-md;
+    spacing: Theme.space-2;
+    if root.icon != "": Icon {
+        data: root.icon;
+        stroke: Ink.fg(root.on);
+        y: (parent.height - self.height) / 2;
+    }
+    CardTitle { text: root.title; on: root.on; horizontal-stretch: 1; }
+    @children
+    if root.badge != "": Badge {
+        text: root.badge;
+        up: root.badge-up;
+        bad: root.badge-bad;
+        y: (parent.height - self.height) / 2;
+    }
+    if root.action-icon != "": IconButton {
+        icon: root.action-icon;
+        small: true;
+        kind: root.on == TileStyle.inverse && !Theme.glass ? IconButtonStyle.surface : IconButtonStyle.muted;
+        label: root.action-label;
+        clicked => { root.action(); }
+    }
+}
+
+// Accent choice: colour dot over the name; four share a row equally.
+export component Swatch inherits Rectangle {
+    in property <string> name;
+    in property <color> tone;
+    in property <bool> active;
+    callback clicked;
+    accessible-role: button;
+    accessible-label: root.name;
+    accessible-checkable: true;
+    accessible-checked: root.active;
+    accessible-action-default => { root.clicked(); }
+    horizontal-stretch: 1;
+    preferred-width: 1px;
+    height: 64px;
+    border-radius: Theme.radius-sm;
+    background: root.active ? Theme.c.surface-inverse : Ink.raised(TileStyle.surface);
+    animate background { duration: Motion.quick; }
+    transform-scale: ta.pressed ? 0.94 : 1;
+    animate transform-scale { duration: Motion.press; easing: spring(0.2); }
+    VerticalLayout {
+        alignment: center;
+        spacing: 6px;
+        HorizontalLayout {
+            alignment: center;
+            Rectangle {
+                width: 20px;
+                height: 20px;
+                border-radius: 10px;
+                background: root.tone;
+                border-width: 2px;
+                border-color: root.active ? Theme.c.ink-inverse.with-alpha(0.25) : transparent;
+            }
+        }
+        Text {
+            text: root.name;
+            font-size: Type.caption;
+            font-weight: 600;
+            horizontal-alignment: center;
+            color: root.active ? Theme.c.ink-inverse : Theme.c.ink;
+        }
+    }
+    ta := TouchArea { clicked => { root.clicked(); } }
 }

@@ -1,6 +1,50 @@
-import { Theme, Type, Icons } from "../theme.slint";
+import { Theme, Type, Icons, Motion, Glass } from "../theme.slint";
 import { Tile, TileStyle, Chip, ChipScroller, Caption, CardTitle, Amount, PageTitle, PillNav,
-         IconButton, IconButtonStyle, PillButton, ButtonStyle } from "../components/bento.slint";
+         IconButton, IconButtonStyle, PillButton, ButtonStyle, CardHeader, Ink, Swatch } from "../components/bento.slint";
+
+// On/off row with a sliding knob.
+component Switch inherits Rectangle {
+    in property <string> text;
+    in property <string> note;
+    in property <bool> on;
+    callback toggled(bool);
+    accessible-role: switch;
+    accessible-label: root.text;
+    accessible-checkable: true;
+    accessible-checked: root.on;
+    accessible-action-default => { root.toggled(!root.on); }
+    height: lay.preferred-height;
+    lay := HorizontalLayout {
+        spacing: Theme.space-3;
+        VerticalLayout {
+            horizontal-stretch: 1;
+            alignment: center;
+            spacing: 2px;
+            Text { text: root.text; font-size: Type.label + 1px; font-weight: 600; color: Theme.c.ink; }
+            if root.note != "": Caption { text: root.note; wrap: word-wrap; }
+        }
+        Rectangle {
+            width: 52px;
+            height: 32px;
+            y: (parent.height - self.height) / 2;
+            border-radius: 16px;
+            background: root.on ? Theme.c.accent : Ink.raised(TileStyle.surface);
+            border-width: root.on ? 0px : 1px;
+            border-color: Theme.c.line;
+            animate background { duration: Motion.quick; }
+            Rectangle {
+                x: root.on ? parent.width - self.width - 4px : 4px;
+                y: 4px;
+                width: 24px;
+                height: 24px;
+                border-radius: 12px;
+                background: root.on ? Theme.c.on-accent : Theme.c.ink-muted;
+                animate x { duration: Motion.snappy; easing: spring(0.2); }
+            }
+        }
+    }
+    TouchArea { clicked => { root.toggled(!root.on); } }
+}
 
 export component SettingsScreen inherits VerticalLayout {
     in property <string> currency;
@@ -16,6 +60,12 @@ export component SettingsScreen inherits VerticalLayout {
     callback weekend-changed(int);
     callback currency-changed(string);
     callback load-demo();
+    in property <int> style-index;      // 0 Bento, 1 Aurora Glass
+    in property <bool> reduce-motion;
+    in property <bool> solid-glass;
+    callback style-changed(int);
+    callback reduce-motion-changed(bool);
+    callback solid-glass-changed(bool);
 
     property <[string]> currencies: ["SAR", "AED", "KWD", "QAR", "BHD", "OMR", "EGP", "JOD", "MAD", "DZD", "TND", "IQD", "USD", "EUR", "GBP"];
 
@@ -30,21 +80,33 @@ export component SettingsScreen inherits VerticalLayout {
     PageTitle { first: "App"; second: "Settings"; }
 
     Tile {
-        CardTitle { text: "Look"; }
+        order: 0;
+        CardHeader { title: "Look"; }
+        VerticalLayout {
+            spacing: Theme.space-2;
+            Caption { text: "Style"; }
+            PillNav {
+                items: ["Bento", "Aurora Glass"];
+                on: TileStyle.surface;
+                current: root.style-index;
+                changed(i) => { root.style-changed(i); }
+            }
+        }
         VerticalLayout {
             spacing: Theme.space-2;
             Caption { text: "Accent"; }
-            ChipScroller {
-                for name[i] in ["Lime", "Solar", "Ember", "Lilac"]: Chip {
-                    text: name;
-                    swatch: Theme.accents[i];
+            // four equal swatches, no scrolling
+            HorizontalLayout {
+                spacing: Theme.space-2;
+                for name[i] in ["Lime", "Solar", "Ember", "Lilac"]: Swatch {
+                    name: name;
+                    tone: Theme.accents[i];
                     active: Theme.palette == i;
-                    on: TileStyle.surface;
                     clicked => { root.palette-changed(i); }
                 }
             }
         }
-        VerticalLayout {
+        if root.style-index == 0: VerticalLayout {
             spacing: Theme.space-2;
             Caption { text: "Mode"; }
             PillNav {
@@ -54,15 +116,38 @@ export component SettingsScreen inherits VerticalLayout {
                 changed(i) => { root.dark-changed(i == 0); }
             }
         }
+        if root.style-index == 1: Caption {
+            text: "Aurora Glass is always dark: glass needs a dark, glowing background to read well.";
+            wrap: word-wrap;
+        }
     }
 
     Tile {
-        CardTitle { text: "Payday"; }
+        order: 1;
+        inner-spacing: Theme.space-4;
+        CardHeader { title: "Comfort"; }
+        Switch {
+            text: "Reduce motion";
+            note: "No springs or zooms; screens fade.";
+            on: root.reduce-motion;
+            toggled(v) => { root.reduce-motion-changed(v); }
+        }
+        if root.style-index == 1: Switch {
+            text: "Solid glass";
+            note: "Panels become opaque for more contrast.";
+            on: root.solid-glass;
+            toggled(v) => { root.solid-glass-changed(v); }
+        }
+    }
+
+    Tile {
+        order: 2;
+        CardHeader { title: "Payday"; }
         Text {
             text: "Your budget cycle starts on this day of the month, so salary and spending land in the same cycle.";
             wrap: word-wrap;
             font-size: Type.label;
-            color: Theme.c.ink-muted;
+            color: Ink.muted(TileStyle.surface);
         }
         HorizontalLayout {
             spacing: Theme.space-3;
@@ -97,7 +182,8 @@ export component SettingsScreen inherits VerticalLayout {
     }
 
     Tile {
-        CardTitle { text: "Weekend"; }
+        order: 3;
+        CardHeader { title: "Weekend"; }
         PillNav {
             items: ["Fri – Sat", "Sat – Sun"];
             on: TileStyle.surface;
@@ -108,7 +194,8 @@ export component SettingsScreen inherits VerticalLayout {
     }
 
     Tile {
-        CardTitle { text: "Currency"; }
+        order: 4;
+        CardHeader { title: "Currency"; }
         ChipScroller {
             for code in root.currencies: Chip {
                 text: code;
@@ -123,14 +210,15 @@ export component SettingsScreen inherits VerticalLayout {
     Tile {
         style: TileStyle.soft;
         inner-spacing: Theme.space-2;
-        CardTitle { text: "Private by design"; }
+        order: 5;
+        CardHeader { title: "Private by design"; on: TileStyle.soft; }
         Text {
             text: "Everything stays in a database on this phone. No account, no internet permission, no ads.";
             wrap: word-wrap;
             font-size: Type.label;
-            color: Theme.c.ink-muted;
+            color: Ink.muted(TileStyle.soft);
         }
-        if root.data-note != "": Caption { text: root.data-note; }
+        if root.data-note != "": Caption { text: root.data-note; on: TileStyle.soft; }
         if root.can-load-demo: HorizontalLayout {
             alignment: start;
             padding-top: Theme.space-2;
@@ -141,6 +229,6 @@ export component SettingsScreen inherits VerticalLayout {
                 clicked => { root.load-demo(); }
             }
         }
-        Caption { text: "Income Radar " + root.version; }
+        Caption { text: "Income Radar " + root.version; on: TileStyle.soft; }
     }
 }

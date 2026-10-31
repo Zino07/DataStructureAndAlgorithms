@@ -29,11 +29,13 @@ export struct Dashboard {
     savings-rate: string,     // "42%" or "—"
     savings-ratio: float,
     week-total: string,
+    net: string,              // income − spent this cycle
+    net-negative: bool,
 }
 
 export struct TxRow {
     id: int,
-    header: bool,             // date separator row
+    header: bool,             // date separator row; then amount = spent that day, meta = received
     transfer: bool,
     title: string,
     meta: string,
@@ -69,6 +71,8 @@ export struct AccountItem {
     icon: string,
     balance: string,
     negative: bool,
+    share: float,             // share of all positive balances, 0..1
+    percent: string,          // "62%" or ""
 }
 
 export struct SuggestionItem {
@@ -95,6 +99,9 @@ export struct BudgetRow {
     spent: string,
     ratio: float,
     over: bool,
+    pace: float,              // share of the cycle that has passed
+    suggest: string,          // keypad text of a suggested limit, "" when none
+    suggest-label: string,    // "450.00 · last cycle 412.30"
 }
 
 // Everything on the Stats screen.

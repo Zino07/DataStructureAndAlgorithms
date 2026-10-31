@@ -4,12 +4,19 @@ A lightweight personal-finance app for Android, written in Rust.
 
 * **UI:** [Slint](https://slint.dev) (native, GPU-rendered, no WebView, no JVM UI code)
 * **Storage:** SQLite (bundled through `rusqlite`), stored on the device only
-* **Design:** Bento Neo design system: 8 themes (Lime, Solar, Ember, Lilac × light/dark), Manrope font
-* **APK size:** about 7 MB (single arm64 `.so`, release profile with LTO and `opt-level = "s"`)
+* **Design:** Bento Neo design system: 8 themes (Lime, Solar, Ember, Lilac × light/dark) plus the
+  **Aurora Glass** style (frosted panels over a soft aurora, a little glow), Manrope font
+* **APK size:** about 8 MB (single arm64 `.so`, release profile with LTO and `opt-level = "s"`)
 
 | Home | Stats | New entry | Activity | Budgets | Light |
 |---|---|---|---|---|---|
 | ![](docs/screenshots/home-lime-dark.png) | ![](docs/screenshots/stats-lime-dark.png) | ![](docs/screenshots/add-lime-dark.png) | ![](docs/screenshots/activity-lime-dark.png) | ![](docs/screenshots/budgets-lime-dark.png) | ![](docs/screenshots/home-lime-light.png) |
+
+**Aurora Glass**
+
+| Home | Stats | New entry | Activity | Budgets | Settings |
+|---|---|---|---|---|---|
+| ![](docs/screenshots/glass-home-lime.png) | ![](docs/screenshots/glass-stats-lime.png) | ![](docs/screenshots/glass-add-lime.png) | ![](docs/screenshots/glass-activity-lime.png) | ![](docs/screenshots/glass-budgets-ember.png) | ![](docs/screenshots/glass-settings-lime.png) |
 
 ## What it does
 
@@ -32,14 +39,22 @@ A lightweight personal-finance app for Android, written in Rust.
 * **Accounts:** balances are calculated from the ledger (opening + entries + transfers), never stored.
 * **Money as integers:** amounts are stored in minor units (`i64`). Input accepts Arabic-Indic digits.
 * **Private:** no account, no network permission, no ads.
-* **Look:** Bento Neo, 8 themes. Floating dock, top bar and toasts use a **dark frosted glass**
-  tint (dense translucent dark with a light top edge, only on floating chrome, never on content).
-  Slint has no backdrop blur, so this is a tint, not a true blur.
+* **Look:** Bento Neo, 8 themes, or **Aurora Glass** (Settings → Style). Glass panels sample a
+  pre-blurred aurora drawn once on the CPU, so they look frosted without a live backdrop blur
+  (Slint has none). A soft glow follows your finger. Text contrast is unit-tested against the
+  brightest pixel behind every panel (WCAG AA). "Solid glass" turns the frost off.
+* **Motion:** spring animations everywhere (interruptible, they keep their speed when you
+  reverse them). The **+** button morphs into the entry page and back, like Apple's Magic Move.
+  Tiles fade in one after another, the nav thumb and dock disc glide. **Reduce motion** in
+  Settings turns it all to short fades.
 
 ## Tested like 100 real people
 
 `app/examples/simulate.rs` drives the real UI (taps, scrolling, swipes, typing) for 100 simulated
 people × 5 sessions, keeps a shadow ledger and checks every balance, plus statistics sums.
+Latest run after the redesign: 60 of 100 people (stopped early), 1 unexpected problem,
+still to be looked at. The last full run had 2 (budget saves), traced to the simulator tapping
+while the page was still scrolling.
 See [`docs/SIMULATION_REPORT.md`](docs/SIMULATION_REPORT.md) for what it found and what was fixed, and
 [`docs/SIMULATION_RESULTS.md`](docs/SIMULATION_RESULTS.md) for the raw numbers.
 
@@ -112,6 +127,8 @@ cargo apk build -p income-radar --lib --release
 * Arabic UI with right-to-left layout (needs an Arabic font paired with Manrope)
 * Savings goals, home-screen widget for quick entry
 * Check on a real device: the app was built and verified on desktop and by simulation only
+  (frame rate, battery and the glass look on a phone screen are not measured yet)
+* Look into memory growth over 500 simulated sessions in one process and a ~2 s slowest tap
 
 ## Fonts
 

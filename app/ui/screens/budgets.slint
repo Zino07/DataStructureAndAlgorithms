@@ -1,5 +1,6 @@
 import { Theme, Type, Icons } from "../theme.slint";
-import { Tile, TileStyle, Caption, CardTitle, IconButton, Icon, Progress, Field, PillButton, ButtonStyle } from "../components/bento.slint";
+import { Tile, TileStyle, Caption, CardTitle, IconButton, Icon, Progress, Field, PillButton, ButtonStyle, Chip,
+         CardHeader, Ink } from "../components/bento.slint";
 import { BudgetRow } from "../data.slint";
 
 component BudgetItem inherits VerticalLayout {
@@ -16,7 +17,7 @@ component BudgetItem inherits VerticalLayout {
             width: 40px;
             height: 40px;
             border-radius: 20px;
-            background: Theme.c.surface-muted;
+            background: Ink.raised(TileStyle.surface);
             Icon { data: root.item.icon; }
         }
         VerticalLayout {
@@ -37,7 +38,26 @@ component BudgetItem inherits VerticalLayout {
             }
         }
     }
-    if root.item.limit != "": Progress { value: root.item.ratio; fill: root.item.over ? Theme.c.negative : Theme.c.accent; }
+    // spent against the limit; the tick is how far into the cycle we are
+    if root.item.limit != "": HorizontalLayout {
+        padding-left: 52px;
+        Progress {
+            value: root.item.ratio;
+            marker: root.item.pace;
+            fill: root.item.over ? Theme.c.negative : root.item.ratio > root.item.pace + 0.1 ? #f0a030 : Theme.c.accent;
+        }
+    }
+    // one tap: a round limit just above what this category cost last cycle
+    if root.item.limit == "" && root.item.suggest != "" && !root.open: HorizontalLayout {
+        padding-left: 52px;
+        alignment: start;
+        Chip {
+            text: "Use " + root.item.suggest-label;
+            icon: Icons.sparkle;
+            on: TileStyle.surface;
+            clicked => { root.error = root.save(root.item.id, root.item.suggest); }
+        }
+    }
     if root.open: HorizontalLayout {
         spacing: Theme.space-2;
         Field {
@@ -80,16 +100,18 @@ export component BudgetsScreen inherits VerticalLayout {
     Tile {
         style: TileStyle.soft;
         inner-spacing: Theme.space-2;
-        CardTitle { text: "A limit per category, per cycle"; }
+        order: 0;
+        CardHeader { title: "A limit per category, per cycle"; on: TileStyle.soft; }
         Text {
-            text: "Home and Stats warn you at 80% and when a category goes over.";
+            text: "Home and Stats warn you at 80% and when a category goes over. Suggestions round up what each category cost last cycle.";
             wrap: word-wrap;
             font-size: Type.label;
-            color: Theme.c.ink-muted;
+            color: Ink.muted(TileStyle.soft);
         }
     }
     Tile {
         inner-spacing: Theme.space-5;
+        order: 1;
         for row in root.rows: BudgetItem {
             item: row;
             currency: root.currency;

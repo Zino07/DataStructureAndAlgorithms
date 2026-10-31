@@ -1,6 +1,6 @@
 import { Theme, Type, Icons } from "../theme.slint";
 import { Tile, TileStyle, Chip, ChipScroller, Caption, CardTitle, Amount, PageTitle, PillButton, ButtonStyle,
-         Field, ListRow, IconButton, IconButtonStyle } from "../components/bento.slint";
+         Field, ListRow, IconButton, IconButtonStyle, CardHeader, Progress, Ink, Morph } from "../components/bento.slint";
 import { Dashboard, AccountItem } from "../data.slint";
 
 export component AccountsScreen inherits VerticalLayout {
@@ -16,6 +16,7 @@ export component AccountsScreen inherits VerticalLayout {
     property <int> kind: 1;
     property <string> opening;
     property <int> selected: -1;
+    in-out property <bool> adding: false;
 
     spacing: Theme.gap;
 
@@ -24,6 +25,7 @@ export component AccountsScreen inherits VerticalLayout {
     Tile {
         style: TileStyle.inverse;
         inner-spacing: Theme.space-2;
+        order: 0;
         Caption { text: "Total balance"; on: TileStyle.inverse; }
         Amount { value: root.dash.balance; unit: root.dash.currency; size: Type.metric-xl; on: TileStyle.inverse; }
         HorizontalLayout {
@@ -40,33 +42,51 @@ export component AccountsScreen inherits VerticalLayout {
                 small: true;
                 kind: ButtonStyle.accent;
                 enabled: root.accounts.length > 1;
-                clicked => { root.transfer(); }
+                clicked => {
+                    Morph.from(self.absolute-position.x, self.absolute-position.y, self.width, self.height, self.height / 2, Theme.c.accent);
+                    root.transfer();
+                }
             }
         }
     }
 
     Tile {
-        inner-spacing: 2px;
+        inner-spacing: Theme.space-1;
         pad: Theme.space-5;
-        for acc in root.accounts: ListRow {
-            icon: acc.icon;
-            title: acc.name;
-            meta: acc.kind;
-            value: root.selected == acc.id ? "" : acc.balance;
-            negative: acc.negative;
-            selected: root.selected == acc.id;
-            clicked => {
-                root.selected = root.selected == acc.id ? -1 : acc.id;
-                root.error = "";
-            }
-            if root.selected == acc.id: PillButton {
-                text: "Archive";
-                small: true;
-                kind: ButtonStyle.ghost;
-                y: (parent.height - self.height) / 2;
+        order: 1;
+        CardHeader { title: "Accounts"; }
+        for acc in root.accounts: VerticalLayout {
+            spacing: 0px;
+            ListRow {
+                icon: acc.icon;
+                title: acc.name;
+                meta: acc.kind + (acc.percent != "" ? " · " + acc.percent + " of total" : "");
+                value: root.selected == acc.id ? "" : acc.balance;
+                negative: acc.negative;
+                selected: root.selected == acc.id;
                 clicked => {
-                    root.error = root.archive(acc.id);
-                    root.selected = -1;
+                    root.selected = root.selected == acc.id ? -1 : acc.id;
+                    root.error = "";
+                }
+                if root.selected == acc.id: PillButton {
+                    text: "Archive";
+                    small: true;
+                    kind: ButtonStyle.ghost;
+                    y: (parent.height - self.height) / 2;
+                    clicked => {
+                        root.error = root.archive(acc.id);
+                        root.selected = -1;
+                    }
+                }
+            }
+            // share of everything you have, under the name
+            HorizontalLayout {
+                padding-left: 52px;
+                padding-bottom: Theme.space-2;
+                Progress {
+                    value: acc.share;
+                    thickness: 4px;
+                    fill: acc.negative ? Theme.c.negative : Theme.glass ? Theme.c.accent : Ink.strong(TileStyle.surface);
                 }
             }
         }
@@ -75,11 +95,35 @@ export component AccountsScreen inherits VerticalLayout {
             height: 24px;
             vertical-alignment: bottom;
         }
+        if root.error != "" && !root.adding: Text {
+            text: root.error;
+            font-size: Type.label;
+            font-weight: 600;
+            color: Theme.c.negative;
+            wrap: word-wrap;
+        }
+        if !root.adding: HorizontalLayout {
+            padding-top: Theme.space-2;
+            alignment: start;
+            PillButton {
+                text: "New account";
+                icon: Icons.plus;
+                kind: ButtonStyle.ghost;
+                small: true;
+                on: TileStyle.surface;
+                clicked => {
+                    root.adding = true;
+                    root.error = "";
+                }
+            }
+        }
     }
 
-    Tile {
+    // the form only shows once asked for
+    if root.adding: Tile {
         inner-spacing: Theme.space-4;
-        CardTitle { text: "Add an account"; }
+        order: 0;
+        CardHeader { title: "New account"; }
         Field {
             label: "Name";
             placeholder: "e.g. Main bank, Wallet";
@@ -88,11 +132,15 @@ export component AccountsScreen inherits VerticalLayout {
         VerticalLayout {
             spacing: Theme.space-2;
             Caption { text: "Type"; }
-            ChipScroller {
-                Chip { text: "Cash"; on: TileStyle.surface; active: root.kind == 0; clicked => { root.kind = 0; } }
-                Chip { text: "Bank"; on: TileStyle.surface; active: root.kind == 1; clicked => { root.kind = 1; } }
-                Chip { text: "Card"; on: TileStyle.surface; active: root.kind == 2; clicked => { root.kind = 2; } }
-                Chip { text: "Savings"; on: TileStyle.surface; active: root.kind == 3; clicked => { root.kind = 3; } }
+            HorizontalLayout {
+                spacing: Theme.space-2;
+                for t[i] in ["Cash", "Bank", "Card", "Savings"]: Chip {
+                    horizontal-stretch: 1;
+                    text: t;
+                    on: TileStyle.surface;
+                    active: root.kind == i;
+                    clicked => { root.kind = i; }
+                }
             }
         }
         Field {
@@ -108,14 +156,29 @@ export component AccountsScreen inherits VerticalLayout {
             color: Theme.c.negative;
             wrap: word-wrap;
         }
-        PillButton {
-            text: "Add account";
-            icon: Icons.plus;
-            clicked => {
-                root.error = root.add-account(root.name, root.kind, root.opening);
-                if root.error == "" {
-                    root.name = "";
-                    root.opening = "";
+        HorizontalLayout {
+            spacing: Theme.space-2;
+            PillButton {
+                text: "Cancel";
+                kind: ButtonStyle.ghost;
+                on: TileStyle.surface;
+                clicked => {
+                    root.adding = false;
+                    root.error = "";
+                }
+            }
+            PillButton {
+                horizontal-stretch: 1;
+                text: "Add account";
+                icon: Icons.plus;
+                kind: Theme.glass ? ButtonStyle.accent : ButtonStyle.inverse;
+                clicked => {
+                    root.error = root.add-account(root.name, root.kind, root.opening);
+                    if root.error == "" {
+                        root.name = "";
+                        root.opening = "";
+                        root.adding = false;
+                    }
                 }
             }
         }

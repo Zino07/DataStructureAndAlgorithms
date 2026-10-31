@@ -272,6 +272,9 @@ impl Store {
                 Some(_) => Weekend::FriSat,
                 None => d.weekend,
             },
+            style: num("style", d.style)?.min(1),
+            reduce_motion: self.setting("reduce_motion")?.as_deref() == Some("1"),
+            solid_glass: self.setting("solid_glass")?.as_deref() == Some("1"),
         })
     }
 
@@ -290,6 +293,9 @@ impl Store {
         )?;
         self.set_setting("palette", &s.palette.min(3).to_string())?;
         self.set_setting("dark", if s.dark { "1" } else { "0" })?;
+        self.set_setting("style", &s.style.min(1).to_string())?;
+        self.set_setting("reduce_motion", if s.reduce_motion { "1" } else { "0" })?;
+        self.set_setting("solid_glass", if s.solid_glass { "1" } else { "0" })?;
         self.set_setting(
             "weekend",
             if s.weekend == Weekend::SatSun {

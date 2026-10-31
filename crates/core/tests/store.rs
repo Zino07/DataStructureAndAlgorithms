@@ -152,9 +152,14 @@ fn settings_round_trip_and_clamp() {
             palette: 9,
             dark: false,
             weekend: Weekend::SatSun,
+            style: 7,
+            reduce_motion: true,
+            solid_glass: true,
         })
         .unwrap();
     let s = store.settings().unwrap();
+    assert_eq!(s.style, 1);
+    assert!(s.reduce_motion && s.solid_glass);
     assert_eq!(s.currency, "AED");
     assert_eq!(s.cycle_start_day, 28);
     assert_eq!(s.palette, 3);

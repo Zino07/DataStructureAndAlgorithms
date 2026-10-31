@@ -1,6 +1,25 @@
 import { Theme, Type, Icons } from "../theme.slint";
 import { Tile, TileStyle, PillNav, ListRow, Caption, Amount, PageTitle, IconButton, IconButtonStyle,
-         Field } from "../components/bento.slint";
+         Field, Ink } from "../components/bento.slint";
+
+// One figure of the compact summary.
+component Sum inherits VerticalLayout {
+    in property <string> caption;
+    in property <string> value;
+    in property <color> color: Ink.fg(TileStyle.inverse);
+    horizontal-stretch: 1;
+    preferred-width: 1px;
+    spacing: 2px;
+    Caption { text: root.caption; on: TileStyle.inverse; }
+    Text {
+        text: root.value;
+        font-size: Type.body + 1px;
+        font-weight: 600;
+        letter-spacing: -0.2px;
+        color: root.color;
+        overflow: elide;
+    }
+}
 import { Dashboard, TxRow } from "../data.slint";
 
 export component ActivityScreen inherits VerticalLayout {
@@ -36,23 +55,21 @@ export component ActivityScreen inherits VerticalLayout {
         }
     }
 
+    // compact summary of the cycle: received, spent and what is left
     if root.filter != 3: Tile {
         style: TileStyle.inverse;
-        inner-spacing: Theme.space-3;
+        pad: Theme.space-4;
+        inner-spacing: Theme.space-2;
+        order: 0;
         Caption { text: root.dash.cycle; on: TileStyle.inverse; }
         HorizontalLayout {
-            spacing: Theme.space-4;
-            VerticalLayout {
-                horizontal-stretch: 1;
-                spacing: 2px;
-                Caption { text: "Income"; on: TileStyle.inverse; }
-                Amount { value: root.dash.income; size: Type.metric-sm + 4px; on: TileStyle.inverse; }
-            }
-            VerticalLayout {
-                horizontal-stretch: 1;
-                spacing: 2px;
-                Caption { text: "Spent"; on: TileStyle.inverse; }
-                Amount { value: root.dash.expense; size: Type.metric-sm + 4px; on: TileStyle.inverse; }
+            spacing: Theme.space-3;
+            Sum { caption: "Received"; value: "+" + root.dash.income; }
+            Sum { caption: "Spent"; value: "−" + root.dash.expense; }
+            Sum {
+                caption: "Net";
+                value: (root.dash.net-negative ? "−" : "+") + root.dash.net;
+                color: root.dash.net-negative ? Theme.c.negative : Theme.glass ? Theme.c.accent : Ink.fg(TileStyle.inverse);
             }
         }
     }
@@ -60,6 +77,7 @@ export component ActivityScreen inherits VerticalLayout {
     Tile {
         inner-spacing: 2px;
         pad: Theme.space-5;
+        order: 1;
         if root.result-note != "": Caption { text: root.result-note; height: 20px; }
         if root.rows.length == 0: VerticalLayout {
             padding-top: Theme.space-4;
@@ -72,11 +90,29 @@ export component ActivityScreen inherits VerticalLayout {
             }
         }
         for row in root.rows: VerticalLayout {
-            if row.header: Caption {
-                text: row.title;
-                height: 34px;
-                vertical-alignment: bottom;
-                font-weight: 600;
+            // day header with what was spent and received that day
+            if row.header: HorizontalLayout {
+                height: 36px;
+                spacing: Theme.space-2;
+                padding-bottom: 2px;
+                Caption {
+                    text: row.title;
+                    vertical-alignment: bottom;
+                    font-weight: 700;
+                    color: Theme.c.ink;
+                    horizontal-stretch: 1;
+                }
+                if row.meta != "": Caption {
+                    text: row.meta;
+                    vertical-alignment: bottom;
+                    font-weight: 600;
+                    color: Theme.c.positive;
+                }
+                if row.amount != "": Caption {
+                    text: row.amount;
+                    vertical-alignment: bottom;
+                    font-weight: 600;
+                }
             }
             if !row.header: ListRow {
                 icon: row.icon;

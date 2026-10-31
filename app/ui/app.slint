@@ -3,8 +3,8 @@ import "../fonts/Manrope-Medium.ttf";
 import "../fonts/Manrope-SemiBold.ttf";
 import "../fonts/Manrope-Bold.ttf";
 
-import { Theme, Type, Icons, Glass } from "theme.slint";
-import { Dock, DockItem, Toast, PillButton, ButtonStyle } from "components/bento.slint";
+import { Theme, Type, Icons, Glass, Motion } from "theme.slint";
+import { Dock, DockItem, Toast, PillButton, ButtonStyle, GlassFill, Morph } from "components/bento.slint";
 import { Dashboard, Bar, TxRow, CategoryItem, CategoryShare, AccountItem, SuggestionItem, Insight,
          BudgetRow, StatsView } from "data.slint";
 import { HomeScreen } from "screens/home.slint";
@@ -15,7 +15,7 @@ import { SettingsScreen } from "screens/settings.slint";
 import { StatsScreen } from "screens/stats.slint";
 import { BudgetsScreen } from "screens/budgets.slint";
 
-export { Theme, Dashboard, Bar, TxRow, CategoryItem, CategoryShare, AccountItem, SuggestionItem, Insight,
+export { Theme, Glass, Motion, Morph, Dashboard, Bar, TxRow, CategoryItem, CategoryShare, AccountItem, SuggestionItem, Insight,
          BudgetRow, StatsView }
 
 export enum Screen { home, activity, stats, accounts, settings, budgets }
@@ -53,6 +53,7 @@ export component AppWindow inherits Window {
     in property <[CategoryShare]> stat-categories;
     in property <[TxRow]> largest;
     in property <[Insight]> insights;
+    in property <bool> flow-cut;
     in-out property <int> stats-range: 0;
     // accounts, budgets, settings
     in property <[AccountItem]> accounts;
@@ -62,6 +63,9 @@ export component AppWindow inherits Window {
     in property <string> version;
     in property <string> data-note;
     in property <bool> can-load-demo;
+    in property <int> style-index;
+    in property <bool> reduce-motion;
+    in property <bool> solid-glass;
     // navigation
     in-out property <Screen> screen: Screen.home;
     in-out property <bool> adding: false;
@@ -74,6 +78,7 @@ export component AppWindow inherits Window {
     callback delete-transfer(int);
     pure callback edit-amount(string, string) -> string;
     pure callback day-label(int) -> string;
+    pure callback short-day(int) -> string;
     pure callback time-label(int) -> string;
     // asks Rust to call `load-entry` with the stored values
     callback request-edit(int);
@@ -88,6 +93,9 @@ export component AppWindow inherits Window {
     callback cycle-day-changed(int);
     callback weekend-changed(int);
     callback currency-changed(string);
+    callback style-changed(int);
+    callback reduce-motion-changed(bool);
+    callback solid-glass-changed(bool);
     callback load-demo();
     callback toast-act();
     callback screen-changed(Screen);
@@ -102,7 +110,32 @@ export component AppWindow inherits Window {
     property <bool> scrolled: main-scroll.content-y < -24px;
     property <bool> show-dock: !root.adding && root.screen != Screen.settings && root.screen != Screen.budgets;
 
+    // ---- morph ("magic move") ----
+    // One spring drives the whole transition: 0 = source control, 1 = full
+    // page. Opening and closing just retarget it, so a reversal mid-way keeps
+    // its velocity and never jumps.
+    property <float> morph: root.adding ? 1 : 0;
+    animate morph { duration: Motion.smooth; easing: spring(0); }
+    property <float> mp: Math.clamp(root.morph, 0, 1);
+    // source look fades out in the first third, the page fades in after 30%
+    property <float> src-fade: 1 - Math.clamp(root.mp / 0.35, 0, 1);
+    property <float> page-fade: Math.clamp((root.mp - 0.3) / 0.5, 0, 1);
+    out property <float> morph-progress: root.morph;
+    out property <bool> morph-settled: root.adding ? root.morph > 0.995 : root.morph < 0.005;
+
+    // window size and scroll parallax for the glass
+    init => {
+        Glass.win-width = root.width;
+        Glass.win-height = root.height;
+    }
+    changed width => { Glass.win-width = root.width; }
+    changed height => { Glass.win-height = root.height; }
+
     public function open-add() {
+        // no control reported where it is (e.g. opened from code): grow from the dock
+        if Morph.w <= 0 {
+            Morph.from(root.width / 2 - 24px, root.height - root.bottom-inset - 72px, 48px, 48px, 24px, Theme.c.accent);
+        }
         add-screen.reset();
         root.adding = true;
         add-scroll.content-y = 0;
@@ -134,6 +167,7 @@ export component AppWindow inherits Window {
     out property <float> scroll-pos: (root.adding ? -add-scroll.content-y : -main-scroll.content-y) / 1px;
     // error shown on the entry screen
     out property <string> entry-error: add-screen.error;
+    out property <int> entry-category: add-screen.chosen-category;
 
     public function go(s: Screen) {
         root.screen = s;
@@ -142,8 +176,23 @@ export component AppWindow inherits Window {
         root.screen-changed(s);
     }
 
+    // Aurora Glass: the fixed backdrop, drifting a little with scroll
+    if Theme.glass: Image {
+        x: 0;
+        y: -Glass.shift;
+        width: root.width;
+        height: root.height + Glass.travel;
+        source: Glass.backdrop;
+        image-fit: fill;
+    }
+
     main-scroll := Flickable {
-        visible: !root.adding;
+        visible: !root.adding || root.morph < 0.995;
+        // the page underneath recedes while the morph grows over it
+        transform-scale: 1 - 0.04 * root.mp;
+        changed content-y => {
+            Glass.shift = Math.clamp(-self.content-y * 0.06, 0px, Glass.travel);
+        }
         content-height: main-content.preferred-height;
         main-content := VerticalLayout {
             width: main-scroll.width;
@@ -151,7 +200,7 @@ export component AppWindow inherits Window {
             padding-right: Theme.margin;
             padding-top: root.top-inset + 12px;
             // room for the floating dock
-            padding-bottom: root.bottom-inset + (root.show-dock ? 116px : 32px);
+            padding-bottom: root.bottom-inset + (root.show-dock ? 128px : 40px);
 
             if root.screen == Screen.home: HomeScreen {
                 dash: root.dash;
@@ -195,6 +244,7 @@ export component AppWindow inherits Window {
                 categories: root.stat-categories;
                 largest: root.largest;
                 insights: root.insights;
+                has-cut: root.flow-cut;
                 range: root.stats-range;
                 range-changed(i) => {
                     root.stats-range = i;
@@ -212,6 +262,12 @@ export component AppWindow inherits Window {
             }
             if root.screen == Screen.settings: SettingsScreen {
                 currency: root.dash.currency;
+                style-index: root.style-index;
+                reduce-motion: root.reduce-motion;
+                solid-glass: root.solid-glass;
+                style-changed(i) => { root.style-changed(i); }
+                reduce-motion-changed(b) => { root.reduce-motion-changed(b); }
+                solid-glass-changed(b) => { root.solid-glass-changed(b); }
                 cycle-day: root.cycle-day;
                 weekend: root.weekend;
                 version: root.version;
@@ -237,50 +293,152 @@ export component AppWindow inherits Window {
         }
     }
 
-    add-scroll := Flickable {
-        visible: root.adding;
-        content-height: add-content.preferred-height;
-        add-content := VerticalLayout {
-            width: add-scroll.width;
-            padding-left: Theme.margin;
-            padding-right: Theme.margin;
-            padding-top: root.top-inset + 12px;
-            padding-bottom: Math.max(root.bottom-inset, root.keyboard) + 20px;
-            add-screen := AddScreen {
-                currency: root.dash.currency;
-                expense-categories: root.expense-categories;
-                income-categories: root.income-categories;
-                accounts: root.accounts;
-                expense-suggestions: root.expense-suggestions;
-                income-suggestions: root.income-suggestions;
-                now-minute: root.now-minute;
-                close => { root.adding = false; }
-                save(id, kind, amount, category, account, to, days, minute, note) => {
-                    return root.save-entry(id, kind, amount, category, account, to, days, minute, note);
+    // dims the page underneath
+    Rectangle {
+        background: #000000;
+        opacity: 0.45 * root.mp;
+        visible: root.mp > 0.002;
+    }
+
+    // The morph container: its rectangle and corners travel from the tapped
+    // control to the whole window. Inside, the control's colour fades out
+    // early and the entry page (fixed to the window) fades in late.
+    morph-layer := Rectangle {
+        visible: root.adding || root.morph > 0.002;
+        x: Morph.x * (1 - root.mp);
+        y: Morph.y * (1 - root.mp);
+        width: Morph.w + (root.width - Morph.w) * root.mp;
+        height: Morph.h + (root.height - Morph.h) * root.mp;
+        border-radius: Morph.r * (1 - root.mp);
+        clip: true;
+        background: Theme.glass ? #050607 : Theme.c.canvas;
+        if Theme.glass: Image {
+            x: -parent.x;
+            y: -parent.y - Glass.shift;
+            width: root.width;
+            height: root.height + Glass.travel;
+            source: Glass.backdrop;
+            image-fit: fill;
+        }
+        Rectangle {
+            background: Morph.fill;
+            opacity: root.src-fade;
+        }
+        add-scroll := Flickable {
+            // destination content stays at window coordinates: the container reveals it
+            x: -parent.x;
+            y: -parent.y;
+            width: root.width;
+            height: root.height;
+            opacity: root.page-fade;
+            content-height: add-content.preferred-height;
+            add-content := VerticalLayout {
+                width: add-scroll.width;
+                padding-left: Theme.margin;
+                padding-right: Theme.margin;
+                padding-top: root.top-inset + 12px;
+                padding-bottom: Math.max(root.bottom-inset, root.keyboard) + 20px;
+                add-screen := AddScreen {
+                    currency: root.dash.currency;
+                    expense-categories: root.expense-categories;
+                    income-categories: root.income-categories;
+                    accounts: root.accounts;
+                    expense-suggestions: root.expense-suggestions;
+                    income-suggestions: root.income-suggestions;
+                    now-minute: root.now-minute;
+                    close => { root.adding = false; }
+                    save(id, kind, amount, category, account, to, days, minute, note) => {
+                        return root.save-entry(id, kind, amount, category, account, to, days, minute, note);
+                    }
+                    delete(id) => { root.delete-entry(id); }
+                    edit-amount(current, key) => { return root.edit-amount(current, key); }
+                    day-label(d) => { return root.day-label(d); }
+                    short-day(d) => { return root.short-day(d); }
+                    time-label(m) => { return root.time-label(m); }
                 }
-                delete(id) => { root.delete-entry(id); }
-                edit-amount(current, key) => { return root.edit-amount(current, key); }
-                day-label(d) => { return root.day-label(d); }
-                time-label(m) => { return root.time-label(m); }
+            }
+        }
+        // Entry screen: the save button is pinned above the keyboard / nav bar on glass.
+        if root.adding: save-bar := Rectangle {
+            property <length> lift: Math.max(root.bottom-inset, root.keyboard);
+            property <color> base: Theme.glass ? #050607 : Theme.c.canvas;
+            // inside the morph container, but placed in window coordinates
+            x: -morph-layer.x;
+            width: root.width;
+            y: root.height - self.height - morph-layer.y;
+            height: lift + 80px + (add-screen.error != "" ? 40px : 0px);
+            opacity: root.page-fade;
+            background: @linear-gradient(0deg, self.base.with-alpha(Theme.glass ? 0.9 : 1) 0%, self.base.with-alpha(Theme.glass ? 0.8 : 1) 55%, self.base.with-alpha(0) 100%);
+            if add-screen.error != "": Rectangle {
+                x: Theme.margin;
+                y: parent.height - save-bar.lift - 16px - 48px - self.height - 8px;
+                width: parent.width - 2 * Theme.margin;
+                height: 32px;
+                border-radius: 16px;
+                background: Theme.c.negative;
+                Text {
+                    text: add-screen.error;
+                    font-size: Type.label;
+                    font-weight: 600;
+                    color: #ffffff;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+            }
+            PillButton {
+                x: Theme.margin;
+                y: parent.height - save-bar.lift - self.height - 16px;
+                width: parent.width - 2 * Theme.margin;
+                text: add-screen.save-label;
+                icon: Icons.check;
+                kind: ButtonStyle.accent;
+                clicked => { add-screen.submit(); }
             }
         }
     }
 
-    // Glass behind the status bar: appears once content scrolls under it.
-    Rectangle {
+    // Glass behind the status bar: grows into a bar with the page title once
+    // content scrolls under it, with a hairline and a short fade below.
+    top-bar := Rectangle {
+        property <bool> open: root.scrolled && !root.adding;
         y: 0;
-        height: root.top-inset + (root.scrolled && !root.adding ? 52px : 0px);
-        background: root.scrolled || root.adding ? Glass.bar : transparent;
-        animate height, background { duration: 200ms; easing: ease-out; }
+        height: root.top-inset + (self.open ? 52px : 0px);
+        animate height { duration: Motion.snappy; easing: spring(0); }
+        if !Theme.glass: Rectangle {
+            background: top-bar.open || root.adding ? Glass.bar : Glass.bar.with-alpha(0);
+            animate background { duration: Motion.quick; }
+        }
+        if Theme.glass: GlassFill {
+            width: 100%;
+            height: 100%;
+            tint: #0a0d10c4;
+            edge: false;
+            opacity: top-bar.open || root.adding ? 1 : 0;
+            animate opacity { duration: Motion.quick; }
+        }
+        // hairline
         Rectangle {
             y: parent.height - 1px;
             height: 1px;
-            background: root.scrolled && !root.adding ? Glass.bar-edge : transparent;
+            background: Glass.bar-edge;
+            opacity: top-bar.open ? 1 : 0;
+            animate opacity { duration: Motion.quick; }
         }
-        if root.scrolled && !root.adding: Text {
+        // soft fade under the bar so content dissolves instead of being cut
+        Rectangle {
+            y: parent.height;
+            height: 14px;
+            opacity: top-bar.open ? 1 : 0;
+            animate opacity { duration: Motion.quick; }
+            background: @linear-gradient(180deg, (Theme.glass ? #050607 : Theme.c.canvas).with-alpha(0.55) 0%, (Theme.glass ? #050607 : Theme.c.canvas).with-alpha(0) 100%);
+        }
+        Text {
             y: root.top-inset;
             height: 52px;
             x: Theme.margin;
+            opacity: top-bar.open ? 1 : 0;
+            animate opacity { duration: Motion.quick; }
             text: root.screen == Screen.home ? "Income Radar"
                 : root.screen == Screen.activity ? "Activity"
                 : root.screen == Screen.stats ? "Stats"
@@ -291,48 +449,16 @@ export component AppWindow inherits Window {
             font-weight: 600;
             color: Theme.c.ink;
             vertical-alignment: center;
+            accessible-role: none;
         }
     }
 
     // Fade behind the system navigation bar and the dock.
     Rectangle {
+        property <color> base: Theme.glass ? #050607 : Theme.c.canvas;
         y: parent.height - self.height;
-        height: root.bottom-inset + (root.show-dock ? 64px : 0px);
-        background: @linear-gradient(0deg, Theme.c.canvas.with-alpha(0.94) 0%, Theme.c.canvas.with-alpha(0.94) 35%, Theme.c.canvas.with-alpha(0) 100%);
-    }
-
-    // Entry screen: the save button is pinned above the keyboard / nav bar on glass.
-    if root.adding: save-bar := Rectangle {
-        property <length> lift: Math.max(root.bottom-inset, root.keyboard);
-        y: parent.height - self.height;
-        height: lift + 80px + (add-screen.error != "" ? 40px : 0px);
-        background: @linear-gradient(0deg, Theme.c.canvas 0%, Theme.c.canvas 55%, Theme.c.canvas.with-alpha(0) 100%);
-        if add-screen.error != "": Rectangle {
-            x: Theme.margin;
-            y: parent.height - save-bar.lift - 16px - 48px - self.height - 8px;
-            width: parent.width - 2 * Theme.margin;
-            height: 32px;
-            border-radius: 16px;
-            background: Theme.c.negative;
-            Text {
-                text: add-screen.error;
-                font-size: Type.label;
-                font-weight: 600;
-                color: #ffffff;
-                horizontal-alignment: center;
-                vertical-alignment: center;
-                overflow: elide;
-            }
-        }
-        PillButton {
-            x: Theme.margin;
-            y: parent.height - save-bar.lift - self.height - 16px;
-            width: parent.width - 2 * Theme.margin;
-            text: add-screen.save-label;
-            icon: Icons.check;
-            kind: ButtonStyle.accent;
-            clicked => { add-screen.submit(); }
-        }
+        height: root.bottom-inset + (root.show-dock ? 72px : 0px);
+        background: @linear-gradient(0deg, self.base.with-alpha(0.94) 0%, self.base.with-alpha(0.9) 35%, self.base.with-alpha(0) 100%);
     }
 
     if root.show-dock: Dock {

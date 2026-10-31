@@ -1,6 +1,6 @@
 import { Theme, Type, Icons } from "../theme.slint";
 import { Tile, TileStyle, NotchCard, IconButton, IconButtonStyle, Chip, Badge, Progress, Bars, Amount,
-         ListRow, Caption, CardTitle, PageTitle, Icon, PillButton, ButtonStyle } from "../components/bento.slint";
+         ListRow, Caption, CardTitle, PageTitle, Icon, PillButton, ButtonStyle, CardHeader, Ink, Morph } from "../components/bento.slint";
 import { Dashboard, Bar, TxRow, CategoryShare } from "../data.slint";
 
 export component HomeScreen inherits VerticalLayout {
@@ -25,8 +25,10 @@ export component HomeScreen inherits VerticalLayout {
             width: Theme.control-lg;
             height: Theme.control-lg;
             border-radius: self.width / 2;
-            background: Theme.c.surface-inverse;
-            Icon { data: Icons.radar; stroke: Theme.c.ink-inverse; }
+            background: Theme.glass ? Theme.c.accent : Theme.c.surface-inverse;
+            drop-shadow-blur: Theme.glass ? 18px : 0px;
+            drop-shadow-color: Theme.c.accent.with-alpha(0.4);
+            Icon { data: Icons.radar; stroke: Theme.glass ? Theme.c.on-accent : Theme.c.ink-inverse; }
         }
         Rectangle { horizontal-stretch: 1; }
         Rectangle {
@@ -34,6 +36,8 @@ export component HomeScreen inherits VerticalLayout {
             width: date-row.preferred-width;
             border-radius: self.height / 2;
             background: Theme.c.surface;
+            border-width: Theme.glass ? 1px : 0px;
+            border-color: #ffffff14;
             date-row := HorizontalLayout {
                 padding-left: Theme.space-4;
                 padding-right: Theme.space-5;
@@ -72,6 +76,7 @@ export component HomeScreen inherits VerticalLayout {
     Tile {
         style: TileStyle.inverse;
         inner-spacing: Theme.space-5;
+        order: 0;
         HorizontalLayout {
             spacing: Theme.space-3;
             VerticalLayout {
@@ -82,7 +87,7 @@ export component HomeScreen inherits VerticalLayout {
             }
             IconButton {
                 icon: Icons.arrow-up-right;
-                kind: IconButtonStyle.surface;
+                kind: Theme.glass ? IconButtonStyle.muted : IconButtonStyle.surface;
                 label: "Open accounts";
                 clicked => { root.open-accounts(); }
             }
@@ -96,9 +101,10 @@ export component HomeScreen inherits VerticalLayout {
             Bars {
                 bars: root.week;
                 chart-height: 84px;
-                base: Theme.c.ink-inverse;
-                empty: Theme.c.ink-inverse.with-alpha(0.14);
-                label-color: Theme.c.ink-inverse.with-alpha(0.6);
+                base: Ink.strong(TileStyle.inverse);
+                track: Ink.track(TileStyle.inverse);
+                tip-bg: Theme.glass ? #ffffff26 : Theme.c.surface;
+                label-color: Ink.muted(TileStyle.inverse);
             }
         }
         if !root.dash.has-entries: VerticalLayout {
@@ -107,11 +113,19 @@ export component HomeScreen inherits VerticalLayout {
                 text: "Log what you earn and spend.\nThe radar shows how much you can spend each day.";
                 wrap: word-wrap;
                 font-size: Type.body;
-                color: Theme.c.ink-inverse.with-alpha(0.72);
+                color: Ink.muted(TileStyle.inverse);
             }
             HorizontalLayout {
                 alignment: start;
-                PillButton { text: "Add first entry"; icon: Icons.plus; kind: ButtonStyle.accent; clicked => { root.add(); } }
+                PillButton {
+                    text: "Add first entry";
+                    icon: Icons.plus;
+                    kind: ButtonStyle.accent;
+                    clicked => {
+                        Morph.from(self.absolute-position.x, self.absolute-position.y, self.width, self.height, self.height / 2, Theme.c.accent);
+                        root.add();
+                    }
+                }
             }
             HorizontalLayout {
                 alignment: start;
@@ -125,12 +139,13 @@ export component HomeScreen inherits VerticalLayout {
         style: TileStyle.accent;
         icon: Icons.plus;
         label: "Add entry";
-        button-kind: IconButtonStyle.inverse;
+        button-kind: Theme.glass ? IconButtonStyle.accent : IconButtonStyle.inverse;
+        order: 1;
         action => { root.add(); }
         HorizontalLayout {
             spacing: Theme.space-2;
             Caption { text: root.dash.today-over ? "Over today's budget" : "Left to spend today"; on: TileStyle.accent; }
-            if root.dash.today-over: Icon { data: Icons.alert; size: 14px; stroke: Theme.c.on-accent; }
+            if root.dash.today-over: Icon { data: Icons.alert; size: 14px; stroke: Ink.fg(TileStyle.accent); }
         }
         Amount {
             value: (root.dash.today-over ? "−" : "") + root.dash.today-left;
@@ -140,8 +155,8 @@ export component HomeScreen inherits VerticalLayout {
         }
         Progress {
             value: root.dash.today-ratio;
-            track: Theme.c.on-accent.with-alpha(0.12);
-            fill: Theme.c.on-accent;
+            track: Ink.track(TileStyle.accent);
+            fill: Theme.glass ? Theme.c.accent : Theme.c.on-accent;
         }
         Caption {
             text: root.dash.has-income || root.dash.has-entries
@@ -157,37 +172,31 @@ export component HomeScreen inherits VerticalLayout {
             horizontal-stretch: 1;
             pad: Theme.space-5;
             inner-spacing: Theme.space-3;
-            HorizontalLayout {
-                CardTitle { text: "Income"; }
-                Rectangle { horizontal-stretch: 1; }
-                if root.dash.income-delta != "": Badge {
-                    text: root.dash.income-delta;
-                    up: root.dash.income-up;
-                    y: (parent.height - self.height) / 2;
-                }
+            order: 2;
+            CardHeader {
+                title: "Income";
+                badge: root.dash.income-delta;
+                badge-up: root.dash.income-up;
             }
             Rectangle { vertical-stretch: 1; }
-            Amount { value: root.dash.income; size: Type.metric-sm + 2px; }
+            Amount { value: root.dash.income; size: Type.metric-sm; fit-chars: Math.max(root.dash.income.character-count, root.dash.expense.character-count); }
             Caption { text: "this cycle"; }
         }
         Tile {
             horizontal-stretch: 1;
             pad: Theme.space-5;
             inner-spacing: Theme.space-3;
-            HorizontalLayout {
-                CardTitle { text: "Spent"; }
-                Rectangle { horizontal-stretch: 1; }
-                if root.dash.expense-delta != "": Badge {
-                    text: root.dash.expense-delta;
-                    up: root.dash.expense-up;
-                    bad: root.dash.expense-up;
-                    y: (parent.height - self.height) / 2;
-                }
+            order: 2;
+            CardHeader {
+                title: "Spent";
+                badge: root.dash.expense-delta;
+                badge-up: root.dash.expense-up;
+                badge-bad: root.dash.expense-up;
             }
             Rectangle { vertical-stretch: 1; }
-            Amount { value: root.dash.expense; size: Type.metric-sm + 2px; }
+            Amount { value: root.dash.expense; size: Type.metric-sm; fit-chars: Math.max(root.dash.income.character-count, root.dash.expense.character-count); }
             // the line marks how much of the cycle has passed
-            Progress { value: root.dash.spent-ratio; fill: Theme.c.surface-inverse; marker: root.dash.pace-ratio; }
+            Progress { value: root.dash.spent-ratio; fill: Ink.strong(TileStyle.surface); marker: root.dash.pace-ratio; }
         }
     }
 
@@ -198,31 +207,37 @@ export component HomeScreen inherits VerticalLayout {
             style: TileStyle.soft;
             pad: Theme.space-5;
             inner-spacing: Theme.space-3;
-            CardTitle { text: "Saved"; }
+            order: 3;
+            CardHeader { title: "Saved"; on: TileStyle.soft; }
             Rectangle { vertical-stretch: 1; }
-            Amount { value: root.dash.savings-rate; size: Type.metric-md; }
-            Progress { value: root.dash.savings-ratio; track: Theme.c.surface.with-alpha(0.7); fill: Theme.c.surface-inverse; }
-            Caption { text: "of this cycle's income"; }
+            Amount { value: root.dash.savings-rate; size: Type.metric-md; on: TileStyle.soft; }
+            Progress { value: root.dash.savings-ratio; track: Ink.track(TileStyle.soft); fill: Theme.glass ? Theme.c.accent : Theme.c.surface-inverse; }
+            Caption { text: "of this cycle's income"; on: TileStyle.soft; }
         }
         Tile {
             horizontal-stretch: 1;
             pad: Theme.space-5;
             inner-spacing: Theme.space-3;
-            HorizontalLayout {
-                CardTitle { text: "On pace"; }
-                Rectangle { horizontal-stretch: 1; }
-                IconButton { icon: Icons.arrow-up-right; small: true; kind: IconButtonStyle.muted; label: "Open statistics"; clicked => { root.open-stats(); } }
+            order: 3;
+            CardHeader {
+                title: "On pace";
+                action-icon: Icons.arrow-up-right;
+                action-label: "Open statistics";
+                action => { root.open-stats(); }
             }
             Rectangle { vertical-stretch: 1; }
-            Amount { value: root.dash.projected; size: Type.metric-sm + 2px; }
+            Amount { value: root.dash.projected; size: Type.metric-sm; }
             Caption { text: "spent by cycle end"; }
         }
     }
 
     if root.top-categories.length > 0: Tile {
-        HorizontalLayout {
-            CardTitle { text: "Where it goes"; horizontal-stretch: 1; }
-            IconButton { icon: Icons.arrow-up-right; small: true; kind: IconButtonStyle.muted; label: "Open statistics"; clicked => { root.open-stats(); } }
+        order: 4;
+        CardHeader {
+            title: "Where it goes";
+            action-icon: Icons.arrow-up-right;
+            action-label: "Category statistics";
+            action => { root.open-stats(); }
         }
         for cat in root.top-categories: VerticalLayout {
             spacing: Theme.space-2;
@@ -258,24 +273,21 @@ export component HomeScreen inherits VerticalLayout {
             }
             Progress {
                 value: cat.budget-ratio >= 0 ? cat.budget-ratio : cat.share;
-                fill: cat.over ? Theme.c.negative : Theme.c.surface-inverse;
+                fill: cat.over ? Theme.c.negative : Ink.strong(TileStyle.surface);
             }
         }
     }
 
     if root.dash.has-entries: Tile {
         inner-spacing: Theme.space-1;
-        HorizontalLayout {
-            padding-bottom: Theme.space-2;
-            CardTitle { text: "Recent"; horizontal-stretch: 1; }
-            IconButton {
-                icon: Icons.arrow-up-right;
-                kind: IconButtonStyle.muted;
-                small: true;
-                label: "Open activity";
-                clicked => { root.open-activity(); }
-            }
+        order: 5;
+        CardHeader {
+            title: "Recent";
+            action-icon: Icons.arrow-up-right;
+            action-label: "Open activity";
+            action => { root.open-activity(); }
         }
+        Rectangle { height: Theme.space-1; }
         if root.recent.length == 0: Text {
             text: "Nothing logged yet.";
             font-size: Type.body;

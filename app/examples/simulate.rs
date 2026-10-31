@@ -503,6 +503,8 @@ impl Driver<'_> {
             self.rep.needed_scroll += 1;
             let target = self.ui.get_scroll_pos() + cy - H / 2.0;
             self.ui.invoke_scroll_to(target.max(0.0));
+            // the scroll glides: a person waits for it to stop before tapping
+            self.wait(700);
             match self.find(label, nth) {
                 Some(again) => e = again,
                 None => return false,
@@ -513,19 +515,46 @@ impl Driver<'_> {
         let cx = pos.x + size.width / 2.0;
         let cy = pos.y + size.height / 2.0;
         let start = Instant::now();
-        if !(0.0..=W).contains(&cx) || !(0.0..=H).contains(&cy) {
+        let was_adding = self.ui.get_adding();
+        // the part of the element inside the page margins (chip rows clip there)
+        let vis_l = pos.x.max(16.0);
+        let vis_r = (pos.x + size.width).min(W - 16.0);
+        if !(0.0..=W).contains(&cx) || !(0.0..=H).contains(&cy) || vis_r - vis_l < 24.0 {
             // chip rows scroll sideways: a swipe, then the tap
             self.rep.needed_swipe += 1;
             e.invoke_accessible_default_action();
+        } else if vis_l > pos.x + 1.0 || vis_r < pos.x + size.width - 1.0 {
+            // partly scrolled out of view: a person taps the part they see
+            self.click_at((vis_l + vis_r) / 2.0, cy);
         } else {
             e.mock_single_click(PointerEventButton::Left);
         }
         self.rep
             .tap_times_us
             .push(start.elapsed().as_micros() as u64);
+        // the entry page morphs in and out on a spring: a person waits for
+        // it to settle before the next tap, so does the simulation
+        if self.ui.get_adding() != was_adding {
+            self.wait(900);
+        }
         self.rep.taps += 1;
         self.taps_this_entry += 1;
         true
+    }
+
+    fn click_at(&self, x: f32, y: f32) {
+        let w = self.ui.window();
+        let position = slint::LogicalPosition::new(x, y);
+        w.dispatch_event(WindowEvent::PointerPressed {
+            position,
+            button: PointerEventButton::Left,
+        });
+        self.wait(30);
+        w.dispatch_event(WindowEvent::PointerReleased {
+            position,
+            button: PointerEventButton::Left,
+        });
+        self.wait(30);
     }
 
     fn tap(&mut self, label: &str) -> bool {
@@ -813,6 +842,8 @@ fn simulate_user(
             d.tap("Back");
             for (name, chip, opening) in p.accounts {
                 d.tap("Accounts");
+                // the form opens on request
+                d.tap("New account");
                 d.type_text("Name", name);
                 d.tap(["Cash", "Bank", "Card", "Savings"][*chip]);
                 if !opening.is_empty() {
@@ -869,6 +900,23 @@ fn simulate_user(
             if let Some(sg) = chip {
                 let label = format!("{}{}", suggestion_prefix, sg.amount_label);
                 if roll(rng, 0.75) && d.tap(&label) {
+                    if std::env::var("SIM_DEBUG").is_ok() && d.ui.get_entry_category() < 0 {
+                        let hits: Vec<String> =
+                            ElementHandle::find_by_accessible_label(&d.ui, &label)
+                                .map(|h| {
+                                    format!(
+                                        "{:?}@{:?} {:?}",
+                                        h.accessible_role(),
+                                        h.absolute_position(),
+                                        h.size()
+                                    )
+                                })
+                                .collect();
+                        eprintln!(
+                            "suggestion tap did not apply {label}: settled={} hits={hits:?}",
+                            d.ui.get_morph_settled()
+                        );
+                    }
                     used_suggestion = true;
                     d.rep.entries_via_suggestion += 1;
                     typed = Money::parse(&sg.amount).unwrap_or_default();
@@ -906,7 +954,26 @@ fn simulate_user(
                 }
                 if roll(rng, p.typo) {
                     skipped_category = true;
-                } else if !d.tap(e.category) {
+                } else if d.tap(e.category) {
+                    if std::env::var("SIM_DEBUG").is_ok() && d.ui.get_entry_category() < 0 {
+                        let hits: Vec<String> =
+                            ElementHandle::find_by_accessible_label(&d.ui, e.category)
+                                .map(|h| {
+                                    format!(
+                                        "{:?}@{:?} {:?}",
+                                        h.accessible_role(),
+                                        h.absolute_position(),
+                                        h.size()
+                                    )
+                                })
+                                .collect();
+                        eprintln!(
+                            "category tap did not select {}: settled={} hits={hits:?}",
+                            e.category,
+                            d.ui.get_morph_settled()
+                        );
+                    }
+                } else {
                     eprintln!(
                         "category tap failed (first): {} cats={:?}",
                         e.category,
@@ -941,8 +1008,8 @@ fn simulate_user(
                     let options = [
                         ("1 h ago", (m - 60).rem_euclid(1440)),
                         ("3 h ago", (m - 180).rem_euclid(1440)),
-                        ("This morning", 480),
-                        ("Last night", 1260),
+                        ("Morning", 480),
+                        ("Night", 1260),
                     ];
                     let dist = |a: i64, b: i64| (a - b).abs().min(1440 - (a - b).abs());
                     let (name, at) = options
@@ -986,6 +1053,24 @@ fn simulate_user(
                     *d.rep.expected_errors_shown.entry(err).or_default() += 1;
                 }
                 let ok = d.tap(e.category);
+                if ok && std::env::var("SIM_DEBUG").is_ok() && d.ui.get_entry_category() < 0 {
+                    let hits: Vec<String> =
+                        ElementHandle::find_by_accessible_label(&d.ui, e.category)
+                            .map(|h| {
+                                format!(
+                                    "{:?}@{:?} {:?}",
+                                    h.accessible_role(),
+                                    h.absolute_position(),
+                                    h.size()
+                                )
+                            })
+                            .collect();
+                    eprintln!(
+                        "retry did not select {}: scroll={} hits={hits:?}",
+                        e.category,
+                        d.ui.get_scroll_pos()
+                    );
+                }
                 if !ok {
                     eprintln!(
                         "category tap failed: {} cats={:?}",
@@ -1232,6 +1317,17 @@ fn simulate_user(
                                 .or_default() += 1;
                         }
                     } else if !ok {
+                        if std::env::var("SIM_DEBUG").is_ok() {
+                            let limits: Vec<String> =
+                                d.ui.get_budget_rows()
+                                    .iter()
+                                    .map(|r| format!("{}={}", r.name, r.limit))
+                                    .collect();
+                            eprintln!(
+                                "budget miss: idx={idx} label={label} nth={nth} err={:?} rows={limits:?}",
+                                d.ui.get_entry_error()
+                            );
+                        }
                         d.rep.bug(user, format!("budget {limit} not saved"));
                     }
                 }
@@ -1252,6 +1348,7 @@ fn simulate_user(
         if roll(rng, p.p_account) {
             d.go_home();
             d.tap("Accounts");
+            d.tap("New account");
             // odd names people type: empty, duplicate, Arabic, very long
             let name = match rng.next(4) {
                 0 => "".to_string(),
