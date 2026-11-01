@@ -14,7 +14,7 @@
 <meta property="og:description" content="Thobes cut for Friday, Eid and every day. Sizes 52–58, cash on delivery across Algeria.">
 <meta property="og:type" content="website">
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"Store","name":"Kaser Abd Alaziz","description":"Men's thobe house: thobes, djellabas and shirts. Cash on delivery across Algeria, DZD prices, free shipping over 8,000 DZD.","currenciesAccepted":"DZD","paymentAccepted":"Cash on delivery"}</script>
-  <link rel="stylesheet" href="styles.css?v=20261027A">
+  <link rel="stylesheet" href="styles.css?v=20261101A">
 </head>
 <body class="has-banner">
   <div class="stage"><div class="dream" id="dream" aria-hidden="true"><i class="orb o1"></i><i class="orb o2"></i><i class="orb o3"></i><i class="sheen"></i></div><div class="veil"></div><div class="grain"></div></div>
@@ -348,6 +348,11 @@
                 <p class="adm-hint">Delivery rates live in <code>shipping.json</code>. Ask your developer to adjust them, or open the file directly on the server.</p>
               </div>
             </div>
+            <div class="adm-card">
+              <div class="adm-card-head"><div><h2>Marketing · Meta Pixel</h2><p id="admPixelStatus">Off</p></div></div>
+              <label class="adm-field"><span>Meta Pixel ID</span><input type="text" id="admPixel" inputmode="numeric" maxlength="20" placeholder="1234567890123456"><small>Meta Events Manager → Data sources → your pixel → the number under its name. Leave empty to turn the pixel off. Visitors are asked for consent before it loads.</small></label>
+              <button class="adm-btn adm-btn-primary" id="admPixelSave" type="button">Save pixel</button>
+            </div>
             <div class="adm-grid-2">
               <div class="adm-card" id="admSecCard">
                 <div class="adm-card-head"><div><h2>Sign-in &amp; security</h2><p id="admSecStatus">Checking…</p></div></div>
@@ -679,6 +684,11 @@
       <p class="contact-note" data-i18n="privacyUse">The store team, and the delivery company you choose (name, phone and address only). Nothing is used for advertising.</p>
       <h3 data-i18n="privacyDeviceT">On your device</h3>
       <p class="contact-note" data-i18n="privacyDevice">Your bag, language and delivery details are saved in your browser so you don't retype them. A sign-in cookie keeps you logged in. There are no advertising or tracking cookies.</p>
+      <div id="privacyPixelBox" hidden>
+        <h3 data-i18n="privacyPixelT">Advertising cookies</h3>
+        <p class="contact-note" data-i18n="privacyPixel">With your consent only, this shop uses the Meta (Facebook) Pixel. It tells Meta which pages and products were viewed and when an order is placed, so our ads can be measured. Refuse and nothing is sent to Meta.</p>
+        <button type="button" class="foot-link" id="consentReopen" data-i18n="consentReopen">Change my cookie choice</button>
+      </div>
       <h3 data-i18n="privacyRightsT">Your rights</h3>
       <p class="contact-note" data-i18n="privacyRights">Under Algerian law 18-07 you can ask to see, correct or delete your data. Message us on WhatsApp or through the Contact page.</p>
       <div class="contact-footer"><button class="pill btn-secondary" id="privacyClose2" type="button" data-i18n="close">Close</button></div>
@@ -696,6 +706,13 @@
       <button class="pill" id="checkoutBtn" style="width:100%" data-i18n="checkout">Checkout</button>
     </div>
   </aside>
+  <div class="consent-bar" id="consentBar" role="dialog" aria-labelledby="consentText" hidden>
+    <p id="consentText" data-i18n="consentText">We would like to use advertising cookies (Meta Pixel) to measure our ads. Your choice is saved and you can change it any time.</p>
+    <div class="consent-actions">
+      <button type="button" class="pill btn-secondary" id="consentNo" data-i18n="consentNo">Refuse</button>
+      <button type="button" class="pill" id="consentYes" data-i18n="consentYes">Accept</button>
+    </div>
+  </div>
   <div class="toaster" id="toaster" aria-live="polite"></div>
   <footer class="foot"><span data-i18n="foot">Noor Thobe House &nbsp;·&nbsp; Algiers &nbsp;·&nbsp; Cash on delivery across Algeria</span> <span class="tdots" id="themeDots"></span> &nbsp;·&nbsp; <button type="button" class="foot-link" id="footContact" data-i18n="contactNav">Contact</button> &nbsp;·&nbsp; <button type="button" class="foot-link" data-open-privacy data-i18n="privacyLink">Privacy</button> &nbsp;·&nbsp; <a href="#admin" id="adminLink" class="adminlink">Admin</a></footer>
   <div class="mobile-menu" id="mobileMenu">
@@ -715,6 +732,6 @@
     <button id="tabBag" type="button" data-tab="bag" data-i18n="bag">Bag</button>
   </nav>
   <div class="track" id="scrollTrack"></div>
-<script src="app.js?v=20261027A" defer></script>
+<script src="app.js?v=20261101A" defer></script>
 </body>
 </html>

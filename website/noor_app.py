@@ -146,7 +146,9 @@ DEFAULT_SETTINGS = {
     "banner": {"active": False, "text": "", "bg": "#171214", "fg": "#ffffff"},
     "promos": [{"code": "NOOR10", "pct": 10, "active": True, "label": "Welcome −10%"}],
     "social": {"instagram": "", "facebook": "", "tiktok": ""},
+    "pixel": "",
 }
+PIXEL_RE = re.compile(r"^\d{8,20}$")
 HEX_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 LOGO_EXTS = (".png", ".jpg", ".jpeg", ".webp")
 
@@ -179,6 +181,31 @@ CSP = (
     "base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
     + ("; upgrade-insecure-requests" if os.environ.get("BEHIND_TLS", "1") == "1" else "")
 )
+
+
+_PIXEL_CACHE = [0.0, ""]
+
+
+def pixel_id():
+    """Meta Pixel ID from Admin -> Settings (or META_PIXEL_ID); cached 20 s."""
+    now = time.time()
+    if now - _PIXEL_CACHE[0] > 20:
+        try:
+            _PIXEL_CACHE[1] = get_settings().get("pixel", "")
+        except Exception:
+            _PIXEL_CACHE[1] = ""
+        _PIXEL_CACHE[0] = now
+    return _PIXEL_CACHE[1]
+
+
+def csp_value():
+    """CSP for every response. The Meta hosts are allowed only while a pixel
+    ID is configured; the page itself loads the pixel only after consent."""
+    if not pixel_id():
+        return CSP
+    return (CSP.replace("img-src 'self' data:", "img-src 'self' data: https://www.facebook.com")
+               .replace("script-src 'self'", "script-src 'self' https://connect.facebook.net")
+               .replace("connect-src 'self'", "connect-src 'self' https://www.facebook.com https://connect.facebook.net"))
 
 
 def next_order_num():
@@ -502,6 +529,10 @@ def get_settings():
     for key in ("instagram", "facebook", "tiktok"):
         social[key] = clean_social(key, raw_social.get(key, ""))
     out["social"] = social
+    pixel = re.sub(r"\s", "", str(out.get("pixel", "")))
+    if not PIXEL_RE.match(pixel):
+        pixel = re.sub(r"\s", "", os.environ.get("META_PIXEL_ID", ""))
+    out["pixel"] = pixel if PIXEL_RE.match(pixel) else ""
     return out
 
 
@@ -783,7 +814,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("X-Permitted-Cross-Domain-Policies", "none")
         for k, v in extra:
             self.send_header(k, v)
-        self.send_header("Content-Security-Policy", CSP)
+        self.send_header("Content-Security-Policy", csp_value())
         if ENABLE_HSTS:
             self.send_header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
         self.end_headers()
@@ -1167,6 +1198,7 @@ class Handler(BaseHTTPRequestHandler):
                              "theme": st.get("theme", DEFAULT_THEME),
                              "banner": st.get("banner", DEFAULT_SETTINGS["banner"]),
                              "social": st.get("social", DEFAULT_SETTINGS["social"]),
+                             "pixel": st.get("pixel", ""),
                              "promos": [p for p in st.get("promos", []) if p.get("active")]})
             return
         if parsed.path == "/api/shipping":
@@ -1693,6 +1725,13 @@ class Handler(BaseHTTPRequestHandler):
                         st["whatsapp"] = wa
                     if "siteName" in data:
                         st["siteName"] = clean_text(data.get("siteName"), 40) or "Noor"
+                    if "pixel" in data:
+                        px = re.sub(r"\s", "", str(data.get("pixel", "")))[:30]
+                        if px and not PIXEL_RE.match(px):
+                            self._json(400, {"ok": False, "error": "pixel-invalid"})
+                            return
+                        st["pixel"] = px
+                        _PIXEL_CACHE[0] = 0.0
                     if isinstance(data.get("social"), dict):
                         social = dict(st.get("social", DEFAULT_SETTINGS["social"]))
                         for key in ("instagram", "facebook", "tiktok"):
@@ -1738,6 +1777,7 @@ class Handler(BaseHTTPRequestHandler):
                     st["banner"] = bn
                 save_json(SETTINGS_FILE, st)
             self._json(200, {"ok": True, "settings": st, "whatsapp": st.get("whatsapp", ""),
+                             "pixel": st.get("pixel", ""),
                              "social": st.get("social", DEFAULT_SETTINGS["social"])})
             return
         if parsed.path == "/api/admin/promos":

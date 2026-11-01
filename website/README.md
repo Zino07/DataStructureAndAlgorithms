@@ -157,6 +157,23 @@ Older versions also wrote `orders.json`, `users.json`, `tokens.json`,
 `reviews.json`, `counter.json` and `logo.json` next to the code. On first
 start, after their content is in the database, those copies are deleted.
 
+## Meta Pixel (Facebook / Instagram ads)
+
+1. Meta Events Manager → Data sources → your pixel → copy the number (ID).
+2. Admin → Settings → **Marketing · Meta Pixel** → paste it → Save.
+   (Or set `META_PIXEL_ID` in `.env`; the admin field wins when filled.)
+3. Visitors now see a cookie banner (Arabic / French / English). The pixel loads
+   **only after "Accept"**; "Refuse" sends nothing to Meta.
+4. Events sent after consent: PageView, ViewContent (product popup),
+   AddToCart, InitiateCheckout, Purchase (order value in DZD, order number as
+   the event ID so a future server-side feed can de-duplicate).
+5. Test with Meta's *Pixel Helper* browser extension or Events Manager →
+   Test events.
+
+The security policy (CSP) allows Meta's hosts only while a pixel ID is saved.
+It is sent by the app, so do **not** set a fixed `Content-Security-Policy` line
+in `.htaccess` (Apache would override the app's and block the pixel).
+
 ## Customer emails
 
 When email is configured the shop sends:

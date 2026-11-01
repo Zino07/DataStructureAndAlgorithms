@@ -111,6 +111,12 @@
   };
   var I18N_EXTRA = {
     en: {
+      consentText:"We would like to use advertising cookies (Meta Pixel) to measure our ads. You can change your choice at any time.",
+      consentYes:"Accept",
+      consentNo:"Refuse",
+      consentReopen:"Change my cookie choice",
+      privacyPixelT:"Advertising cookies",
+      privacyPixel:"With your consent only, this shop uses the Meta (Facebook) Pixel. It tells Meta which pages and products were viewed and when an order is placed, so our ads can be measured. Refuse and nothing is sent to Meta.",
       forgotLink:"Forgot password?",
       forgotHelp:"Enter your account email. We'll send you a link to choose a new password.",
       back:"Back",
@@ -138,7 +144,7 @@
       privacyUseT:"Who sees it",
       privacyUse:"The store team, and the delivery company you choose (name, phone and address only). Nothing is used for advertising.",
       privacyDeviceT:"On your device",
-      privacyDevice:"Your bag, language and delivery details are saved in your browser so you don't retype them. A sign-in cookie keeps you logged in. There are no advertising or tracking cookies.",
+      privacyDevice:"Your bag, language and delivery details are saved in your browser so you don't retype them. A sign-in cookie keeps you logged in. Without your consent there are no advertising or tracking cookies.",
       privacyRightsT:"Your rights",
       privacyRights:"Under Algerian law 18-07 you can ask to see, correct or delete your data. Message us on WhatsApp or through the Contact page.",
       title:"Noor — Thobe House | Men's Thobes, Djellabas & Shirts",
@@ -199,6 +205,12 @@
       foot:"Noor Thobe House &nbsp;·&nbsp; Algiers &nbsp;·&nbsp; Cash on delivery across Algeria"
     },
     fr: {
+      consentText:"Nous aimerions utiliser des cookies publicitaires (Meta Pixel) pour mesurer nos publicités. Vous pouvez changer votre choix à tout moment.",
+      consentYes:"Accepter",
+      consentNo:"Refuser",
+      consentReopen:"Modifier mon choix de cookies",
+      privacyPixelT:"Cookies publicitaires",
+      privacyPixel:"Uniquement avec votre accord, cette boutique utilise le Pixel Meta (Facebook). Il indique à Meta quelles pages et quels produits ont été vus et quand une commande est passée, afin de mesurer nos publicités. Si vous refusez, rien n'est envoyé à Meta.",
       forgotLink:"Mot de passe oublié ?",
       forgotHelp:"Saisissez l'e-mail de votre compte. Nous vous enverrons un lien pour choisir un nouveau mot de passe.",
       back:"Retour",
@@ -226,7 +238,7 @@
       privacyUseT:"Qui les voit",
       privacyUse:"L'équipe de la boutique et la société de livraison choisie (nom, téléphone et adresse uniquement). Rien n'est utilisé pour la publicité.",
       privacyDeviceT:"Sur votre appareil",
-      privacyDevice:"Votre panier, votre langue et vos coordonnées de livraison sont enregistrés dans votre navigateur pour éviter de les ressaisir. Un cookie de connexion vous garde connecté. Aucun cookie publicitaire ou de suivi.",
+      privacyDevice:"Votre panier, votre langue et vos coordonnées de livraison sont enregistrés dans votre navigateur pour éviter de les ressaisir. Un cookie de connexion vous garde connecté. Sans votre accord, il n'y a aucun cookie publicitaire ou de suivi.",
       privacyRightsT:"Vos droits",
       privacyRights:"Selon la loi algérienne 18-07, vous pouvez demander à consulter, corriger ou supprimer vos données. Écrivez-nous sur WhatsApp ou via la page Contact.",
       title:"Noor — Maison du Thobe | Thobes, Djellabas & Chemises",
@@ -287,6 +299,12 @@
       foot:"Noor Maison du Thobe &nbsp;·&nbsp; Alger &nbsp;·&nbsp; Paiement à la livraison partout en Algérie"
     },
     ar: {
+      consentText:"نودّ استخدام ملفات تعريف الارتباط الإعلانية (Meta Pixel) لقياس أداء إعلاناتنا. يمكنك تغيير اختيارك في أي وقت.",
+      consentYes:"أوافق",
+      consentNo:"أرفض",
+      consentReopen:"تغيير اختيار الكوكيز",
+      privacyPixelT:"ملفات تعريف الارتباط الإعلانية",
+      privacyPixel:"بموافقتك فقط، يستخدم هذا المتجر بكسل ميتا (فيسبوك). يخبر ميتا بالصفحات والمنتجات التي تمت مشاهدتها ومتى يتم تقديم طلب، لقياس أداء إعلاناتنا. إذا رفضت فلن يُرسَل أي شيء إلى ميتا.",
       forgotLink:"نسيت كلمة المرور؟",
       forgotHelp:"أدخل بريد حسابك الإلكتروني وسنرسل لك رابطاً لاختيار كلمة مرور جديدة.",
       back:"رجوع",
@@ -314,7 +332,7 @@
       privacyUseT:"من يطّلع عليها",
       privacyUse:"فريق المتجر وشركة التوصيل التي تختارها (الاسم والهاتف والعنوان فقط). لا يُستخدم أي شيء للإعلانات.",
       privacyDeviceT:"على جهازك",
-      privacyDevice:"تُحفظ سلتك ولغتك وبيانات التوصيل في متصفحك حتى لا تعيد كتابتها. ملف تعريف ارتباط لتسجيل الدخول يُبقيك متصلاً. لا توجد ملفات تعريف ارتباط إعلانية أو للتتبع.",
+      privacyDevice:"تُحفظ سلتك ولغتك وبيانات التوصيل في متصفحك حتى لا تعيد كتابتها. ملف تعريف ارتباط لتسجيل الدخول يُبقيك متصلاً. وبدون موافقتك لا توجد ملفات تعريف ارتباط إعلانية أو للتتبع.",
       privacyRightsT:"حقوقك",
       privacyRights:"وفق القانون الجزائري 18-07 يمكنك طلب الاطلاع على بياناتك أو تصحيحها أو حذفها. راسلنا على واتساب أو عبر صفحة التواصل.",
       title:"نور — دار الثوب | ثوب وجلابيب وقمصان",
@@ -780,7 +798,7 @@
     var link = document.createElement("link");
     link.id = "adminCss";
     link.rel = "stylesheet";
-    link.href = "admin.css?v=20261027A";
+    link.href = "admin.css?v=20261101A";
     document.head.appendChild(link);
   }
   function handleRoute(){
@@ -1335,7 +1353,7 @@
     syncStock().then(function(){ renderProducts(); }).catch(function(){});
     updateExpressWhatsApp();
     notify(t("coPlaced", n, total), "success");
-    track("order_placed", {n:n, source:"express"});
+    track("order_placed", {n:n, source:"express", value:moneyNum(total), num:num});
     var box = expressModal.querySelector(".ex-box"); if(box) box.scrollTop = 0;
   }
   function productImages(p){
@@ -1609,6 +1627,7 @@
       if(d&&d.ok){
         WHATSAPP_NUMBER=d.whatsapp||"";
         applyStoreSettings(d);
+        setPixelId(d.pixel||"");
         updateExpressWhatsApp();
       }
     }).catch(function(){});
@@ -1990,8 +2009,57 @@
     var h = Object.assign({"Content-Type":"application/json"}, headers||{});
     return fetch(path, {method:method||"GET", headers:h, body:body?JSON.stringify(body):undefined}).then(function(r){ if(!r.ok){ var e=new Error("api"); e.status=r.status; throw e; } return r.json(); });
   }
+  /* ----- Meta Pixel: loaded only when an ID is set AND the visitor accepted ----- */
+  var PIXEL_ID = "", pixelOn = false;
+  function consentGet(){ try{ return localStorage.getItem("noor_consent"); }catch(e){ return null; } }
+  function consentSet(v){ try{ localStorage.setItem("noor_consent", v); }catch(e){} }
+  function loadPixel(){
+    if(pixelOn || !PIXEL_ID || consentGet()!=="yes") return;
+    pixelOn = true;
+    !function(f,b,e,v,n,t,s){ if(f.fbq) return; n=f.fbq=function(){ n.callMethod ? n.callMethod.apply(n,arguments) : n.queue.push(arguments); };
+      if(!f._fbq) f._fbq=n; n.push=n; n.loaded=!0; n.version="2.0"; n.queue=[]; t=b.createElement(e); t.async=!0; t.src=v;
+      s=b.getElementsByTagName(e)[0]; s.parentNode.insertBefore(t,s); }(window,document,"script","https://connect.facebook.net/en_US/fbevents.js");
+    window.fbq("init", PIXEL_ID);
+    window.fbq("track", "PageView");
+  }
+  function pixelEvent(name, params, eventId){
+    if(!pixelOn || !window.fbq) return;
+    try{ window.fbq("track", name, params||{}, eventId ? {eventID:eventId} : undefined); }catch(e){}
+  }
+  function moneyNum(v){ return parseInt(String(v||"").replace(/\D/g,""),10) || 0; }
+  function pixelFromTrack(ev, d){
+    d = d || {};
+    var p = d.id ? productById(d.id) : null;
+    if(ev==="view_product" && p) pixelEvent("ViewContent", {content_type:"product", content_ids:[p.id], content_name:p.name, value:p.price, currency:"DZD"});
+    else if(ev==="add_to_bag" && p) pixelEvent("AddToCart", {content_type:"product", content_ids:[p.id], content_name:p.name, value:p.price, currency:"DZD"});
+    else if(ev==="begin_checkout"){
+      var m = null; try{ m = d.source==="express" ? exMath() : coMath(); }catch(e){}
+      pixelEvent("InitiateCheckout", {value:m?m.total:0, currency:"DZD", num_items:m?m.n:1});
+    }
+    else if(ev==="order_placed") pixelEvent("Purchase", {value:d.value||0, currency:"DZD", num_items:d.n||1}, d.num);
+  }
+  var consentBar = document.getElementById("consentBar");
+  function showConsent(){ if(consentBar && PIXEL_ID) consentBar.hidden = false; }
+  function setPixelId(id){
+    PIXEL_ID = /^\d{8,20}$/.test(id||"") ? id : "";
+    var box = document.getElementById("privacyPixelBox"); if(box) box.hidden = !PIXEL_ID;
+    if(!PIXEL_ID){ if(consentBar) consentBar.hidden = true; return; }
+    var c = consentGet();
+    if(c==="yes") loadPixel(); else if(c!=="no") showConsent();
+  }
+  if(document.getElementById("consentYes")){
+    document.getElementById("consentYes").addEventListener("click", function(){ consentSet("yes"); consentBar.hidden = true; loadPixel(); });
+    document.getElementById("consentNo").addEventListener("click", function(){
+      var was = consentGet()==="yes"; consentSet("no"); consentBar.hidden = true;
+      if(was) window.location.reload();   // already-loaded pixel can only be removed by reloading
+    });
+    document.getElementById("consentReopen").addEventListener("click", function(){
+      var pm = document.getElementById("privacyModal"); if(pm) pm.classList.remove("open"); showConsent();
+    });
+  }
   function track(ev, d){
     try{ fetch("/api/track",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ev:ev,d:d||{}})}).catch(function(){}); }catch(e){}
+    try{ pixelFromTrack(ev, d); }catch(e){}
   }
   function syncStock(){
     return api("/api/products").then(function(d){
@@ -2034,7 +2102,7 @@
     document.getElementById("coForm").hidden = true;
     document.getElementById("coDone").hidden = false;
     document.getElementById("coDoneInfo").innerHTML = orderInfoHtml(num, n, total);
-    notify(t("coPlaced", n, total),"success"); track("order_placed",{n:n});
+    notify(t("coPlaced", n, total),"success"); track("order_placed",{n:n, value:moneyNum(total), num:num});
   }
   /* ----- Admin ----- */
   var admToken = "";
@@ -2623,6 +2691,8 @@
       if(s.logo){ pv.src = s.logo; pv.hidden=false; hint.textContent = "Custom logo in use"; }
       else { pv.hidden=true; pv.removeAttribute("src"); hint.textContent = "Moon icon in use"; }
     }
+    var px = document.getElementById("admPixel");
+    if(px){ px.value = s.pixel || ""; var ps = document.getElementById("admPixelStatus"); if(ps) ps.textContent = s.pixel ? "On · visitors are asked for consent first" : "Off · no pixel ID saved"; }
     var bn = s.banner || {};
     if(document.getElementById("admBanText")) document.getElementById("admBanText").value = bn.text || "";
     if(document.getElementById("admBanBg") && bn.bg) document.getElementById("admBanBg").value = bn.bg;
@@ -2780,6 +2850,20 @@
         notify("Contact details saved","success");
       } else notify("Check the number and links, then try again","error");
     }).catch(function(){ notify("Could not save contact details","error"); });
+  });
+  document.getElementById("admPixelSave").addEventListener("click", function(){
+    var v = document.getElementById("admPixel").value.replace(/\s/g,"");
+    var btn = this; btn.disabled = true;
+    admApi("/api/admin/settings","POST",{token:admToken,pixel:v}).then(function(r){
+      if(r && r.ok){
+        ADM.settings = Object.assign({}, ADM.settings, {pixel:r.pixel||""});
+        setPixelId(r.pixel||"");
+        fillAdminForms();
+        notify(r.pixel ? "Pixel saved. Visitors will be asked for consent." : "Pixel turned off","success");
+      } else notify("Could not save the pixel","error");
+    }).catch(function(e){
+      notify(e && e.status===400 ? "The pixel ID must be 8 to 20 digits." : "Could not save the pixel","error");
+    }).then(function(){ btn.disabled = false; });
   });
   document.getElementById("admRefresh").addEventListener("click", function(){
     adminLoad(); notify("Refreshed","info");
