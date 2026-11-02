@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>brag</title>
+<style>
+@font-face{font-family:"Fraunces";font-style:normal;src:url("site/fonts/fraunces-normal-460.woff2") format("woff2")}
+@font-face{font-family:"Fraunces";font-style:italic;src:url("site/fonts/fraunces-italic-340.woff2") format("woff2")}
+@font-face{font-family:"Inter Tight";src:url("site/fonts/inter-tight-latin.woff2") format("woff2");font-weight:100 900}
+:root{--ink:#201814;--soft:rgba(32,24,20,.66);--faint:rgba(32,24,20,.44);--cream:#f5f1e8;--green:#2f4f43;--gold:#8a6d3b}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1080px;height:1920px;overflow:hidden;background:var(--cream)}
+#stage{position:relative;width:1080px;height:1920px;overflow:hidden;background:var(--cream);font-family:"Inter Tight",sans-serif;color:var(--ink)}
+#bg{position:absolute;inset:0}
+.scene{position:absolute;inset:0;display:none}
+.abs{position:absolute}
+.serif{font-family:"Fraunces",serif;font-weight:400;letter-spacing:-.02em;line-height:.98}
+.it{font-style:italic}
+.eyebrow{font-size:22px;letter-spacing:.14em;text-transform:uppercase;color:var(--soft);font-weight:500}
+.ghost{font-family:"Fraunces",serif;color:transparent;-webkit-text-stroke:2px rgba(32,24,20,.13);white-space:nowrap;line-height:1;letter-spacing:-.01em}
+.center{left:0;right:0;text-align:center}
+.card{background:rgba(255,255,255,.72);border:1px solid rgba(23,18,20,.09);border-radius:34px;box-shadow:0 2px 8px rgba(0,0,0,.05),0 16px 40px rgba(0,0,0,.10)}
+.occ{width:940px;height:330px;padding:20px;display:flex;gap:30px;align-items:center}
+.occ .ph{width:340px;height:290px;flex:none;border-radius:22px;background:#cbcbc9;overflow:hidden;position:relative}
+.occ .ph img{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);height:100%;width:auto}
+.occ .ph img.wide{height:auto;width:100%}
+.occ .n{position:absolute;left:14px;top:14px;font-size:18px;background:rgba(255,255,255,.85);border-radius:999px;padding:3px 12px;color:var(--faint)}
+.occ .tx{flex:1}.occ h3{font-size:42px;font-weight:500;margin-top:6px;letter-spacing:-.01em}
+.occ p{font-size:27px;color:var(--soft);margin-top:12px;line-height:1.3}
+#sizecard{width:940px;padding:36px 44px 34px;left:70px;top:1030px}
+#sizecard .hd,#sizecard .row{display:grid;grid-template-columns:190px 300px 1fr;align-items:center}
+#sizecard .hd{font-size:17px;letter-spacing:.14em;color:var(--faint);padding-bottom:18px;border-bottom:1px solid rgba(23,18,20,.1)}
+#sizecard .row{height:100px;border-bottom:1px solid rgba(23,18,20,.1);font-size:30px;color:var(--soft);position:relative;padding:0 14px;margin:0 -14px}
+#sizecard .row .sz{font-family:"Fraunces",serif;font-size:50px;color:var(--ink)}
+#sizecard .row .hl{position:absolute;inset:6px 0;border-radius:16px;background:rgba(47,79,67,.12);border:2px solid rgba(47,79,67,.55);opacity:0}
+#sizecard .row>*:not(.hl){position:relative}
+#sizecard .cap{font-size:26px;color:var(--soft);margin-top:24px;line-height:1.3}
+.pillrow{display:flex;align-items:center;gap:40px}
+.chk{width:84px;height:84px;border-radius:50%;background:var(--green);display:flex;align-items:center;justify-content:center;flex:none}
+.chk svg{width:42px;height:42px}
+.url{display:inline-block;font-size:44px;font-weight:500;padding:20px 50px;border-radius:999px;background:var(--cream);color:var(--green);letter-spacing:.01em}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="bg"></div>
+
+  <!-- 1 HOOK -->
+  <div class="scene" id="s1">
+    <div class="ghost abs center" id="s1ghost" style="top:770px;font-size:250px">THOBE</div>
+    <div class="eyebrow abs center" id="s1eye" style="top:560px">Noor · Thobe House — Algeria</div>
+    <div class="serif abs center" id="s1w1" style="top:640px;font-size:290px">The</div>
+    <div class="serif abs center" id="s1w2" style="top:905px;font-size:290px">thobe,</div>
+    <div class="serif it abs center" id="s1w3" style="top:1170px;font-size:290px">perfected.</div>
+  </div>
+
+  <!-- 2 REVEAL -->
+  <div class="scene" id="s2">
+    <div class="ghost abs center" id="s2ghost" style="top:40px;font-size:140px">OCCASIONS</div>
+    <div class="eyebrow abs center" id="s2eye" style="top:215px">Collections</div>
+    <div class="serif abs center" id="s2h1" style="top:255px;font-size:190px">Dress for</div>
+    <div class="serif it abs center" id="s2h2" style="top:440px;font-size:190px">the occasion.</div>
+    <div class="card occ abs" id="c1" style="left:70px;top:705px"><div class="ph"><img src="site/images/opt/thobe-grey-forest-896.webp"><span class="n">01</span></div><div class="tx"><h3>Everyday thobes</h3><p>Light cotton and crepe, cut for daily wear.</p></div></div>
+    <div class="card occ abs" id="c2" style="left:70px;top:1063px"><div class="ph"><img src="site/images/opt/thobe-black-gold-896.webp"><span class="n">02</span></div><div class="tx"><h3>Eid &amp; evenings</h3><p>Deeper tones and satin touches for celebration.</p></div></div>
+    <div class="card occ abs" id="c3" style="left:70px;top:1421px"><div class="ph"><img class="wide" src="site/images/opt/djellaba-hood-grey-896.webp"><span class="n">03</span></div><div class="tx"><h3>Djellabas</h3><p>Warm layers with sfifa trim and an easy drape.</p></div></div>
+  </div>
+
+  <!-- 3 FIT -->
+  <div class="scene" id="s3">
+    <div class="ghost abs" id="s3ghost" style="left:420px;top:230px;font-size:440px">FIT</div>
+    <div class="eyebrow abs" id="s3eye" style="left:70px;top:270px">Fit, without guessing</div>
+    <div class="serif abs" id="s3h1" style="left:70px;top:320px;font-size:210px">Find</div>
+    <div class="serif abs" id="s3h2" style="left:70px;top:515px;font-size:210px">your <span class="it">size.</span></div>
+    <div class="abs" id="s3sub" style="left:70px;top:800px;width:900px;font-size:46px;line-height:1.28;color:var(--soft)">Thobes are numbered by height, not chest.</div>
+    <div class="card abs" id="sizecard">
+      <div class="hd" id="s3hd"><span>SIZE</span><span>HEIGHT</span><span>THOBE LENGTH</span></div>
+      <div class="row" id="r52"><i class="hl"></i><span class="sz">52</span><span>165–170 cm</span><span>138 cm</span></div>
+      <div class="row" id="r54"><i class="hl"></i><span class="sz">54</span><span>170–175 cm</span><span>142 cm</span></div>
+      <div class="row" id="r56"><i class="hl" id="hl56"></i><span class="sz">56</span><span>175–180 cm</span><span>146 cm</span></div>
+      <div class="row" id="r58"><i class="hl"></i><span class="sz">58</span><span>180–186 cm</span><span>150 cm</span></div>
+      <div class="cap" id="s3cap">Between sizes? Choose the larger.</div>
+    </div>
+    <svg id="cursor" class="abs" width="52" height="62" viewBox="0 0 26 31" style="left:0;top:0;filter:drop-shadow(0 4px 6px rgba(0,0,0,.25))"><path d="M3 2 L3 24 L9 18.5 L13 28 L17 26.3 L13 17 L21 17 Z" fill="#fff" stroke="#201814" stroke-width="1.8" stroke-linejoin="round"/></svg>
+    <div class="abs" id="ring" style="width:90px;height:90px;border-radius:50%;border:4px solid var(--green);left:0;top:0;opacity:0"></div>
+  </div>
+
+  <!-- 4 TRUST -->
+  <div class="scene" id="s4">
+    <div class="eyebrow abs" id="s4eye" style="left:90px;top:470px">Delivered to your door</div>
+    <div class="abs pillrow" id="t1" style="left:90px;top:560px"><div class="chk"><svg viewBox="0 0 24 24" fill="none" stroke="#f5f1e8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div><div><div class="serif" style="font-size:104px">Cash on delivery</div><div style="font-size:40px;color:var(--soft);margin-top:10px">in all 58 wilayas</div></div></div>
+    <div class="abs pillrow" id="t2" style="left:90px;top:900px"><div class="chk"><svg viewBox="0 0 24 24" fill="none" stroke="#f5f1e8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div><div><div class="serif" style="font-size:104px">Free delivery</div><div style="font-size:40px;color:var(--soft);margin-top:10px">over 8,000 DZD</div></div></div>
+    <div class="abs pillrow" id="t3" style="left:90px;top:1240px"><div class="chk"><svg viewBox="0 0 24 24" fill="none" stroke="#f5f1e8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div><div><div class="serif it" style="font-size:104px">7-day exchange</div><div style="font-size:40px;color:var(--soft);margin-top:10px">on size</div></div></div>
+  </div>
+
+  <!-- 5 OUTRO -->
+  <div class="scene" id="s5">
+    <div class="abs" id="s5bg" style="inset:0;background:var(--green);clip-path:circle(0px at 540px 960px)"></div>
+    <div id="s5c" class="abs" style="inset:0">
+      <img id="s5logo" class="abs" src="site/favicon.svg" style="left:440px;top:430px;width:200px;height:200px;border-radius:44px;box-shadow:0 0 0 2px rgba(232,214,168,.35)">
+      <div class="serif abs center" id="s5t" style="top:700px;font-size:200px;color:#f5f1e8">Kaser Abd<br>Alaziz</div>
+      <div class="serif it abs center" id="s5s" style="top:1160px;font-size:56px;color:#e8d6a8">Thobes cut for Friday, Eid and every day.</div>
+      <div class="abs center" id="s5u" style="top:1310px"><span class="url">kaser-abd-alaziz.com</span></div>
+      <div class="abs center" id="s5f" style="top:1480px;font-size:26px;letter-spacing:.14em;text-transform:uppercase;color:rgba(245,241,232,.7)">Sizes 52–58 · Cash on delivery across Algeria</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const clamp=(x,a=0,b=1)=>Math.min(b,Math.max(a,x));
+const P=(t,s,d)=>clamp((t-s)/d);
+const eo=x=>1-Math.pow(1-x,4);
+const eio=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2;
+const $=id=>document.getElementById(id);
+const S=[0,2.5,7,12.5,17,20];
+const DUR=20;
+
+function reveal(el,t,s,d=.7,dy=44,blur=14){
+  const p=eo(P(t,s,d));
+  el.style.opacity=p;
+  el.style.transform=`translateY(${(1-p)*dy}px)`;
+  el.style.filter=p<1?`blur(${(1-p)*blur}px)`:'none';
+}
+function bg(t){
+  const a=t*.35;
+  const g=(x,y,r,al)=>`radial-gradient(ellipse ${r}px ${r*.8}px at ${x}px ${y}px, rgba(214,178,110,${al}), rgba(214,178,110,0) 70%)`;
+  $('bg').style.background=[
+    g(120+Math.sin(a)*100,380+Math.cos(a*1.1)*120,720,.55),
+    g(960+Math.cos(a*.9)*90,1500+Math.sin(a)*120,760,.42),
+    `radial-gradient(ellipse 800px 600px at ${540+Math.sin(a*.7)*120}px 1860px, rgba(120,150,130,.22), rgba(120,150,130,0) 70%)`,
+    '#f5f1e8'].join(',');
+}
+
+function render(t){
+  bg(t);
+  const scenes=['s1','s2','s3','s4','s5'];
+  scenes.forEach((id,i)=>{
+    const el=$(id);
+    const on=t>=S[i]&&t<S[i+1];
+    el.style.display=on?'block':'none';
+    if(!on)return;
+    const end=S[i+1], last=i===4;
+    if(!last){
+      const o=eio(P(t,end-.3,.3));
+      el.style.opacity=1-o; el.style.transform=`translateY(${-o*26}px)`;
+    }else{el.style.opacity=1;el.style.transform='none'}
+  });
+
+  // S1  0 – 2.5
+  if(t<2.5){
+    const l=t-0;
+    reveal($('s1eye'),l,.5,.7,16,6);
+    reveal($('s1w1'),l,.0,.7,60,18);
+    reveal($('s1w2'),l,.5,.7,60,18);
+    reveal($('s1w3'),l,1.0,.8,70,20);
+    $('s1ghost').style.opacity=eo(P(l,.0,.9));
+    $('s1ghost').style.transform=`scale(${1+l*.012})`;
+  }
+  // S2  2.5 – 7
+  if(t>=2.5&&t<7){
+    const l=t-2.5;
+    $('s2ghost').style.opacity=eo(P(l,0,.8));
+    $('s2ghost').style.transform=`scale(${1+l*.01})`;
+    reveal($('s2eye'),l,0,.6,12,4);
+    reveal($('s2h1'),l,0,.7,50,16);
+    reveal($('s2h2'),l,.5,.7,50,16);
+    reveal($('c1'),l,1.0,.7,70,10);
+    reveal($('c2'),l,2.0,.7,70,10);
+    reveal($('c3'),l,3.0,.7,70,10);
+  }
+  // S3  7 – 12.5
+  if(t>=7&&t<12.5){
+    const l=t-7;
+    $('s3ghost').style.opacity=eo(P(l,0,.8));
+    $('s3ghost').style.transform=`scale(${1+l*.01})`;
+    reveal($('s3eye'),l,0,.6,12,4);
+    reveal($('s3h1'),l,0,.7,56,16);
+    reveal($('s3h2'),l,.5,.7,56,16);
+    reveal($('s3sub'),l,1.0,.8,30,6);
+    reveal($('sizecard'),l,0,.8,50,10);
+    $('s3hd').style.opacity=eo(P(l,.5,.5));
+    ['r52','r54','r56','r58'].forEach((id,i)=>reveal($(id),l,1.0+i*.5,.5,24,4));
+    reveal($('s3cap'),l,4.0,.6,14,4);
+    // cursor: moves to row 56 then clicks at l=3.5
+    const row=$('r56').getBoundingClientRect();
+    const tx=row.left+row.width*.80, ty=row.top+row.height*.55;
+    const sx=900, sy=1800;
+    const mp=eio(P(l,2.8,.7));
+    const cx=sx+(tx-sx)*mp, cy=sy+(ty-sy)*mp;
+    const cur=$('cursor');
+    cur.style.opacity=eo(P(l,2.5,.3))*(1-eo(P(l,4.6,.3)));
+    const press=(l>3.5&&l<3.65)?.88:1;
+    cur.style.transform=`translate(${cx-8}px,${cy-6}px) scale(${press})`;
+    const rp=P(l,3.5,.5);
+    const ring=$('ring'); ring.style.opacity=rp>0&&rp<1?(1-rp)*.8:0;
+    ring.style.transform=`translate(${tx-45}px,${ty-45}px) scale(${.4+rp*1.1})`;
+    const hp=eo(P(l,3.5,.35));
+    $('hl56').style.opacity=hp;
+    $('r56').querySelector('.sz').style.color=hp>.5?'#2f4f43':'#201814';
+  }
+  // S4  12.5 – 17
+  if(t>=12.5&&t<17){
+    const l=t-12.5;
+    reveal($('s4eye'),l,0,.6,12,4);
+    reveal($('t1'),l,.5,.7,60,14);
+    reveal($('t2'),l,1.5,.7,60,14);
+    reveal($('t3'),l,2.5,.7,60,14);
+  }
+  // S5  17 – 20
+  if(t>=17){
+    const l=t-17;
+    const r=eio(P(l,0,.7))*1500;
+    $('s5bg').style.clipPath=`circle(${r}px at 540px 960px)`;
+    reveal($('s5logo'),l,.5,.7,30,6);
+    reveal($('s5t'),l,1.0,.8,50,16);
+    reveal($('s5s'),l,1.5,.8,36,10);
+    reveal($('s5u'),l,2.0,.7,30,6);
+    reveal($('s5f'),l,2.0,.9,14,3);
+  }
+}
+window.render=render;
+window.ready=Promise.all([document.fonts.load('400 100px Fraunces'),document.fonts.load('italic 400 100px Fraunces'),document.fonts.load('500 40px "Inter Tight"'),...[...document.images].map(i=>i.decode().catch(()=>{}))]).then(()=>document.fonts.ready);
+render(0);
+</script>
+</body>
+</html>
