@@ -1,0 +1,10 @@
+# Extracted source frames/art and regenerable intermediates
+work/frames/
+work/art/
+work/fonts/
+work/stills/
+work/music.wav
+work/video-silent.mp4
+work/poster.jpg
+work/check*
+work/final-sheet.jpg
