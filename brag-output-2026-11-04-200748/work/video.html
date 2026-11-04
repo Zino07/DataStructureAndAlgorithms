@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>brag</title>
+<style>
+@font-face{font-family:"ID";src:url("fonts/InterDisplay-Light.otf");font-weight:300}
+@font-face{font-family:"ID";src:url("fonts/InterDisplay-Medium.otf");font-weight:500}
+@font-face{font-family:"ID";src:url("fonts/InterDisplay-SemiBold.otf");font-weight:600}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1080px;height:1920px;overflow:hidden;background:#07060c}
+#stage{position:relative;width:1080px;height:1920px;overflow:hidden;background:#07060c;font-family:"ID",sans-serif;color:#fff}
+img{display:block}
+.layer{position:absolute;inset:0}
+
+#lightbg{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 30%,#ffffff,#e4e3ea 70%)}
+#bgimg{position:absolute;left:-90px;top:-160px;width:1260px;height:2240px;object-fit:cover;filter:blur(80px) brightness(.42) saturate(1.7)}
+#glow{position:absolute;inset:0;mix-blend-mode:screen}
+#grain{position:absolute;inset:0;opacity:.07;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>")}
+
+.card{position:absolute;overflow:hidden;transform-origin:50% 50%}
+.card .in{position:absolute;left:0;top:0;transform-origin:0 0}
+.card img{position:absolute}
+#card{border-radius:56px;border:2px solid rgba(255,255,255,.16);box-shadow:0 40px 120px rgba(0,0,0,.55)}
+
+.hl{position:absolute;left:70px;right:40px;white-space:nowrap;line-height:1.02;letter-spacing:-.025em}
+#h1{font-weight:300}
+#h2{font-weight:600}
+.acc{transition:none}
+
+#chip{position:absolute;left:0;right:0;text-align:center;font-weight:500;font-size:40px;letter-spacing:.32em}
+#chip i{display:inline-block;width:30px;height:30px;border-radius:50%;margin-right:22px;vertical-align:-3px}
+
+#flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+
+/* outro */
+.fan{position:absolute;width:420px;height:846px;border-radius:44px;overflow:hidden;border:2px solid rgba(255,255,255,.18);box-shadow:0 40px 110px rgba(0,0,0,.6)}
+.fan img{position:absolute;left:0;top:-49px;width:420px;height:933px}
+#dots{position:absolute;left:0;right:0;top:1640px;display:flex;justify-content:center;gap:54px}
+.dot{display:flex;flex-direction:column;align-items:center;gap:16px;font-weight:500;font-size:30px;letter-spacing:.06em;color:rgba(255,255,255,.88)}
+.dot i{width:58px;height:58px;border-radius:50%}
+#foot{position:absolute;left:0;right:0;top:1810px;text-align:center;font-weight:500;font-size:28px;letter-spacing:.34em;color:rgba(255,255,255,.62)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="lightbg" class="layer"></div>
+  <img id="bgimg">
+  <div id="glow"></div>
+  <div id="grain"></div>
+
+  <div id="Main" class="layer">
+    <div id="card" class="card"><div class="in"><img id="cimg"></div></div>
+    <div id="chip"><i></i><span></span></div>
+  </div>
+
+  <div id="Out" class="layer" style="display:none">
+    <div class="fan" id="f0"><img src="frames/n1/0001.jpg"></div>
+    <div class="fan" id="f2"><img src="frames/n2/0690.jpg"></div>
+    <div class="fan" id="f1"><img src="frames/n2/0216.jpg"></div>
+    <div id="dots"></div>
+    <div id="foot">AURORA GLASS · BENTO · ANDROID</div>
+  </div>
+
+  <div class="hl" id="h1"></div>
+  <div class="hl" id="h2"></div>
+  <div id="flash"></div>
+</div>
+
+<script>
+const clamp=(x,a=0,b=1)=>Math.min(b,Math.max(a,x));
+const eo=x=>1-Math.pow(1-x,4);
+const eio=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2;
+const $=id=>document.getElementById(id);
+const FPS=24, BPM=120, BEAT=60/BPM;      // 12 frames per beat
+const B=b=>b*BEAT;
+const pad=n=>String(n).padStart(4,'0');
+
+const C={lime:[212,255,59],solar:[255,230,59],ember:[255,123,48],lilac:[197,179,255]};
+const NAME={lime:'LIME',solar:'SOLAR',ember:'EMBER',lilac:'LILAC'};
+
+// source crop rects in the 864x1920 recording
+const LOOK={x:30,y:195,w:804,h:650};      // Settings > Look card (Aurora)
+const LOOK_L={x:30,y:195,w:804,h:735};    // light Bento card also has the Mode row
+const FULL={x:0,y:100,w:864,h:1740};      // whole app, no status bar / system nav
+const HOOK_CARD={l:60,t:640,w:960};
+const PHONE_CARD={l:200,t:500,w:680};
+
+// s/n in beats; src(localFrame) -> source frame number
+const SEG=[
+  {s:0, n:2,v:'hook', src:l=>2+l,               acc:'lilac',h:['Your money,','in a new light.'],h2at:1},
+  {s:2, n:2,v:'hook', src:l=>42+l,              acc:'ember'},
+  {s:4, n:2,v:'hook', src:l=>Math.min(112+l,128),acc:'solar'},
+  {s:6, n:2,v:'hook', src:l=>Math.min(129+l,141),acc:'lime'},
+  {s:8, n:6,v:'phone',src:l=>Math.min(208+l,270),acc:'lilac',h:['Every riyal,','on radar.'],h2at:.5},
+  {s:14,n:8,v:'phone',src:l=>Math.min(652+l,669),acc:'ember',h:['Earned and spent,','by the hour.'],h2at:.5,zoom:{z:1.4,dur:3}},
+  {s:22,n:6,v:'phone',src:l=>Math.min(530+l,562),acc:'ember',h:['See where','it goes.'],h2at:.5},
+  {s:28,n:4,v:'phone',src:l=>Math.min(676+l,700),acc:'ember',h:['All accounts,','one balance.'],h2at:.5},
+];
+const OUTRO=32, END=40;
+
+async function setImg(el,src){ if(el.dataset.src===src)return; el.dataset.src=src; el.src=src; try{await el.decode()}catch(e){} }
+const rgb=(c,a=1)=>`rgba(${c[0]|0},${c[1]|0},${c[2]|0},${a})`;
+const mix=(a,b,p)=>a.map((v,i)=>v+(b[i]-v)*p);
+
+// accent colour at time t (crossfade over 5 frames after each change)
+function accentAt(t){
+  let prev=C.lilac, cur=C.lilac, st=0;
+  for(const s of SEG){ if(t>=B(s.s)-1e-6){ prev=cur; cur=C[s.acc]; st=B(s.s);} }
+  if(t>=B(OUTRO)) return C.lilac;
+  return mix(prev,cur,eo(clamp((t-st)*FPS/5)));
+}
+
+function fitLine(el,maxW,base){
+  el.style.fontSize=base+'px';
+  const w=el.scrollWidth; if(w>maxW) el.style.fontSize=Math.floor(base*maxW/w)+'px';
+}
+function setHead(lines,accentWord){
+  const h1=$('h1'),h2=$('h2');
+  if(h1.dataset.k===lines.join('|'))return;
+  h1.dataset.k=lines.join('|');
+  h1.textContent=lines[0];
+  // colour the word "light." with the accent
+  if(lines[1].endsWith('light.')){ h2.innerHTML='in a new <span class="acc" id="lw">light.</span>'; }
+  else h2.textContent=lines[1];
+  fitLine(h1,960,128); fitLine(h2,960,128);
+}
+function lineIn(el,f,top){
+  const p=eo(clamp(f/9));
+  el.style.opacity=f<0?0:p;
+  el.style.top=(top+(1-p)*46)+'px';
+  el.style.filter=p<1?`blur(${(1-p)*14}px)`:'none';
+}
+
+function placeCard(rect,card,zoom,srcImg){
+  const sc=card.w/rect.w, h=rect.h*sc;
+  const el=$('card'); el.style.left=card.l+'px'; el.style.top=card.t+'px'; el.style.width=card.w+'px'; el.style.height=h+'px';
+  const im=$('cimg'); im.style.width=864*sc+'px'; im.style.height=1920*sc+'px'; im.style.left=-rect.x*sc+'px'; im.style.top=-rect.y*sc+'px';
+  const inn=el.querySelector('.in');
+  if(zoom){ const ox=(zoom.x-rect.x)*sc, oy=(zoom.y-rect.y)*sc; inn.style.transformOrigin=`${ox}px ${oy}px`; inn.style.transform=`scale(${zoom.z})`; }
+  else inn.style.transform='none';
+  return h;
+}
+
+// outro dots
+const ORDER=['lime','solar','ember','lilac'];
+const dotEls=ORDER.map(k=>{const d=document.createElement('div');d.className='dot';d.innerHTML=`<i style="background:${rgb(C[k])};box-shadow:0 0 40px ${rgb(C[k],.8)}"></i>${k[0].toUpperCase()+k.slice(1)}`;$('dots').appendChild(d);return d});
+
+async function render(t){
+  const f=t*FPS, ph=((t/BEAT)%1), pulse=Math.exp(-ph*4.2);
+  const acc=accentAt(t);
+  const light=t<B(1)-1e-6;
+  $('lightbg').style.opacity=light?1:0;
+  $('bgimg').style.opacity=light?0:1;
+  $('grain').style.opacity=light?.04:.07;
+  const outro=t>=B(OUTRO)-1e-6;
+  $('Main').style.display=outro?'none':'block';
+  $('Out').style.display=outro?'block':'none';
+  let flash=0, flashCol='#fff';
+
+  if(!outro){
+    const si=SEG.findIndex(s=>t>=B(s.s)-1e-6&&t<B(s.s+s.n)-1e-6);
+    const s=SEG[si], l=Math.floor((t-B(s.s))*FPS+1e-6), dur=s.n*12;
+    const src=`frames/n2/${pad(s.src(l))}.jpg`;
+    await Promise.all([setImg($('cimg'),src),setImg($('bgimg'),src)]);
+
+    // glow flood: two big radial blooms in the accent colour, breathing on the beat
+    const a=light?0:(.42+.22*pulse);
+    const dx=Math.sin(t*.9)*120, dy=Math.cos(t*.7)*90;
+    $('glow').style.background=light?'none':
+      `radial-gradient(ellipse 900px 1100px at ${180+dx}px ${1500+dy}px,${rgb(acc,a)},transparent 70%),`+
+      `radial-gradient(ellipse 800px 900px at ${900-dx}px ${300-dy}px,${rgb(acc,a*.75)},transparent 70%)`;
+    $('bgimg').style.transform=`scale(${1.08+.03*pulse})`;
+
+    let card, rect, ch;
+    if(s.v==='hook'){
+      rect=light?LOOK_L:LOOK; card=HOOK_CARD;
+      ch=placeCard(rect,card,null);
+      $('card').style.borderRadius='48px';
+      $('card').style.boxShadow=light?'0 30px 80px rgba(20,20,40,.18)':`0 40px 120px rgba(0,0,0,.55),0 0 ${90+60*pulse}px ${rgb(acc,.35)}`;
+      $('card').style.borderColor=light?'rgba(0,0,0,.08)':'rgba(255,255,255,.16)';
+      const sc=1+.012*pulse+.02*(t/B(8));
+      $('card').style.transform=`scale(${sc})`;
+      // chip
+      const chip=$('chip'); chip.style.top=(card.t+ch+70)+'px';
+      const key=light?null:s.acc; const cl=key||'lilac';
+      chip.querySelector('span').textContent=light?'BENTO':NAME[cl];
+      chip.querySelector('i').style.background=light?'#17161c':rgb(C[cl]);
+      chip.querySelector('i').style.boxShadow=light?'none':`0 0 30px ${rgb(C[cl],.9)}`;
+      chip.style.color=light?'#17161c':'rgba(255,255,255,.92)';
+      const lb=(t>=B(1)&&t<B(2))?(t-B(1)):(t-B(s.s));
+      const cp=eo(clamp(lb*FPS/6));
+      chip.style.opacity=cp; chip.style.transform=`translateY(${(1-cp)*20}px)`;
+    }else{
+      rect=FULL; card=PHONE_CARD;
+      const z=s.zoom? (1+(s.zoom.z-1)*eio(clamp((t-B(s.s+1.5))/(B(s.zoom.dur))))):1;
+      ch=placeCard(rect,card,null);
+      $('card').style.transformOrigin=s.zoom?'50% 0':'50% 50%';
+      $('card').style.borderRadius='56px';
+      $('card').style.borderColor='rgba(255,255,255,.16)';
+      $('card').style.boxShadow=`0 40px 120px rgba(0,0,0,.55),0 0 ${110+70*pulse}px ${rgb(acc,.38)}`;
+      const ent=eo(clamp(l/8));
+      $('card').style.transform=`translateY(${(1-ent)*120}px) scale(${(.94+.06*ent)*(1+.03*(l/dur))*z+.008*pulse})`;
+      $('chip').style.opacity=0;
+    }
+
+    // headline (stays across the 4 hook segments)
+    const hs=SEG.slice(0,si+1).reverse().find(x=>x.h);
+    setHead(hs.h);
+    const ht=s.v==='hook'?{a:150,b:300}:{a:150,b:300};
+    lineIn($('h1'),(t-B(hs.s))*FPS,ht.a);
+    lineIn($('h2'),(t-B(hs.s+hs.h2at))*FPS,ht.b);
+    $('h1').style.color=light?'#17161c':'#fff';
+    $('h2').style.color=light?'#17161c':'#fff';
+    $('h1').style.textShadow=$('h2').style.textShadow=light?'none':'0 6px 40px rgba(0,0,0,.35)';
+    const lw=$('lw');
+    if(lw){ lw.style.color=light?'#17161c':rgb(acc); lw.style.textShadow=light?'none':`0 0 50px ${rgb(acc,.55)}`; }
+
+    // flash on every cut (and on the light switch)
+    const sinceCut=(t-B(s.s))*FPS;
+    if(s.s>0) { flash=Math.max(0,1-sinceCut/4)*(s.v==='hook'?.32:.45); flashCol=rgb(mix(acc,[255,255,255],.5)); }
+    const sw=(t-B(1))*FPS; if(sw>=0&&sw<6){ flash=Math.max(flash,(1-sw/6)*.9); flashCol='#fff'; }
+  }else{
+    const l=t-B(OUTRO), lf=l*FPS;
+    // four-colour aurora
+    const k=t*.8;
+    $('bgimg').style.opacity=0;
+    $('glow').style.background=
+      `radial-gradient(ellipse 760px 900px at ${160+Math.sin(k)*80}px ${1450+Math.cos(k)*70}px,${rgb(C.ember,.55+.15*pulse)},transparent 70%),`+
+      `radial-gradient(ellipse 760px 900px at ${940+Math.cos(k)*80}px ${1300+Math.sin(k)*70}px,${rgb(C.lilac,.5+.15*pulse)},transparent 70%),`+
+      `radial-gradient(ellipse 700px 700px at ${240+Math.cos(k*.8)*60}px ${380}px,${rgb(C.lime,.28)},transparent 70%),`+
+      `radial-gradient(ellipse 700px 700px at ${860}px ${300+Math.sin(k*.8)*60}px,${rgb(C.solar,.24)},transparent 70%)`;
+    setHead(['Your money,','in a new light.']);
+    lineIn($('h1'),lf-1,180); lineIn($('h2'),(l-B(.5))*FPS,330);
+    $('h1').style.color=$('h2').style.color='#fff';
+    const lw=$('lw'); const ci=Math.floor(clamp((l-B(2))/BEAT,0,3.999));
+    const lc=l<B(2)?C.lilac:C[ORDER[ci]];
+    if(lw){ lw.style.color=rgb(lc); lw.style.textShadow=`0 0 50px ${rgb(lc,.6)}`; }
+    // fanned phones
+    const fans=[['f0',-1,0],['f1',0,.5],['f2',1,1]];
+    fans.forEach(([id,side,dl])=>{
+      const p=eo(clamp((l-B(dl))*FPS/10));
+      const el=$(id);
+      const x=330+side*300, y=640+Math.abs(side)*60, r=side*11;
+      el.style.left=x+'px'; el.style.top=(y+(1-p)*260)+'px';
+      el.style.opacity=p;
+      el.style.transform=`rotate(${r*p}deg) scale(${(side===0?1.04:.92)+.006*pulse})`;
+      el.style.zIndex=side===0?3:1;
+    });
+    $('f0').style.boxShadow='0 40px 110px rgba(0,0,0,.6)';
+    $('f1').style.boxShadow=`0 40px 110px rgba(0,0,0,.6),0 0 120px ${rgb(C.lilac,.45)}`;
+    $('f2').style.boxShadow=`0 40px 110px rgba(0,0,0,.6),0 0 120px ${rgb(C.ember,.45)}`;
+    dotEls.forEach((d,i)=>{const p=eo(clamp((l-B(2+i))*FPS/6)); d.style.opacity=p; d.style.transform=`translateY(${(1-p)*24}px) scale(${.8+.2*p})`;});
+    const fo=eo(clamp((l-B(6))*FPS/8)); $('foot').style.opacity=fo;
+    flash=Math.max(0,1-lf/5)*.85; flashCol='#fff';
+  }
+  $('flash').style.background=flashCol;
+  $('flash').style.opacity=flash;
+}
+window.render=render;
+window.ready=Promise.all([document.fonts.load('300 100px ID'),document.fonts.load('600 100px ID'),document.fonts.load('500 100px ID'),...[...document.querySelectorAll('.fan img')].map(i=>i.decode())]).then(()=>document.fonts.ready);
+</script>
+</body>
+</html>
