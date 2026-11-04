@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>brag</title>
+<style>
+@font-face{font-family:"Montserrat";src:url("fonts/Montserrat-ExtraBold.ttf") format("truetype");font-weight:800}
+:root{--g1:#ffe58f;--g2:#f2a33a}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1080px;height:1920px;overflow:hidden;background:#05060f}
+#stage{position:relative;width:1080px;height:1920px;overflow:hidden;background:#05060f;font-family:"Montserrat",sans-serif;font-weight:800;color:#fff}
+.abs{position:absolute}
+img{display:block}
+.layer{position:absolute;inset:0;display:none}
+
+#bg{position:absolute;left:0;top:0;width:1080px;height:1920px;object-fit:cover;filter:blur(60px) brightness(.55) saturate(1.5)}
+#vig{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 45%,rgba(5,6,15,0) 40%,rgba(5,6,15,.65) 100%)}
+
+/* landscape-cut window */
+#clipL{position:absolute;left:0;top:640px;width:1080px;height:642px;transform-origin:50% 50%;
+  -webkit-mask-image:linear-gradient(to right,transparent 0,#000 54px,#000 calc(100% - 54px),transparent 100%),linear-gradient(to bottom,transparent 0,#000 36px,#000 calc(100% - 36px),transparent 100%);
+  -webkit-mask-composite:source-in;mask-composite:intersect;
+  mask-image:linear-gradient(to right,transparent 0,#000 54px,#000 calc(100% - 54px),transparent 100%),linear-gradient(to bottom,transparent 0,#000 36px,#000 calc(100% - 36px),transparent 100%)}
+#imgL{width:1080px;height:642px}
+/* portrait-cut phone */
+#phone{position:absolute;left:278px;top:380px;width:524px;height:1058px;border-radius:44px;overflow:hidden;border:4px solid rgba(255,225,150,.35);box-shadow:0 0 110px rgba(255,170,60,.35),0 30px 90px rgba(0,0,0,.6);transform-origin:50% 50%}
+#imgP{width:524px;height:1058px}
+
+#word{position:absolute;left:0;right:0;text-align:center;white-space:nowrap;line-height:1;letter-spacing:-.01em;text-transform:uppercase;transform-origin:50% 60%;will-change:transform}
+#word.gold{background:linear-gradient(180deg,var(--g1),var(--g2));-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 6px 0 rgba(60,25,0,.6)) drop-shadow(0 0 30px rgba(255,170,60,.45))}
+#word.white{color:#fff;text-shadow:0 6px 0 rgba(0,0,0,.45),0 0 34px rgba(120,170,255,.55)}
+
+.chip{position:absolute;left:0;right:0;text-align:center;font-size:50px;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,226,150,.95);text-shadow:0 0 18px rgba(255,170,60,.5)}
+#brand{position:absolute;left:0;right:0;top:1772px;text-align:center;font-size:22px;letter-spacing:.34em;color:#ffd98a;opacity:.8}
+
+#flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+
+/* outro */
+#bgO{position:absolute;left:0;top:0;width:1080px;height:1920px;object-fit:cover;filter:brightness(.95) saturate(1.2)}
+#dimO{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 50%,rgba(5,6,15,.05),rgba(5,6,15,.6) 90%)}
+.tt{position:absolute;left:0;right:0;text-align:center;font-size:246px;line-height:1;letter-spacing:.005em;background:linear-gradient(180deg,var(--g1),var(--g2));-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 8px 0 rgba(60,25,0,.6)) drop-shadow(0 0 40px rgba(255,170,60,.4))}
+#ribbonO{position:absolute;left:220px;top:745px;width:640px}
+#artO{position:absolute;left:90px;top:890px;width:900px}
+#forO{position:absolute;left:0;right:0;top:1480px;text-align:center;font-size:30px;letter-spacing:.42em;color:rgba(255,235,190,.9)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="layer" id="Main">
+    <img id="bg">
+    <div id="vig"></div>
+    <div id="clipL"><img id="imgL"></div>
+    <div id="phone"><img id="imgP"></div>
+    <div id="word"></div>
+    <div id="chips"></div>
+    <div id="brand">CARD CLASH · PREMIUM EDITION</div>
+  </div>
+
+  <div class="layer" id="Out">
+    <img id="bgO">
+    <div id="dimO"></div>
+    <div class="tt" id="t1" style="top:250px">CARD</div>
+    <div class="tt" id="t2" style="top:480px">CLASH</div>
+    <img id="ribbonO" src="art/ribbon_premium.webp">
+    <img id="artO" src="art/cards_subtitle.webp">
+    <div id="forO">FOR ANDROID</div>
+  </div>
+
+  <div id="flash"></div>
+</div>
+
+<script>
+const clamp=(x,a=0,b=1)=>Math.min(b,Math.max(a,x));
+const P=(t,s,d)=>clamp((t-s)/d);
+const eo=x=>1-Math.pow(1-x,4);
+const $=id=>document.getElementById(id);
+const FPS=24, BPM=180, BEAT=60/BPM;           // 10 frames per beat
+const B=b=>b*BEAT;
+
+// s = start beat, n = beats, kind L(andscape window) / P(ortrait phone); hit = beat offset where the word slams in
+const CUTS=[
+  {s:0, n:3,dir:'c0',nf:30,kind:'L',word:'Play.',      hit:0,  g:0},
+  {s:3, n:3,dir:'c1',nf:30,kind:'L',word:'Skip.',      hit:1,  g:1},
+  {s:6, n:3,dir:'c2',nf:30,kind:'L',word:'Reverse.',   hit:0,  g:0},
+  {s:9, n:6,dir:'c3',nf:60,kind:'P',word:'Wild.',      hit:3,  g:1},
+  {s:15,n:3,dir:'c4',nf:30,kind:'L',word:'Colour.',    hit:1,  g:0},
+  {s:18,n:6,dir:'c5',nf:60,kind:'L',word:'Stack +4.',  hit:3.5,g:1},
+  {s:24,n:4,dir:'c9',nf:40,kind:'P',word:'5 modes.',   hit:.5, g:0},
+];
+const OUTRO=28;                                 // beat where the title slams in
+const hits=CUTS.map(c=>({t:B(c.s+c.hit),w:c.word}));
+
+const pad=n=>String(n).padStart(4,'0');
+async function setImg(el,src){ if(el.dataset.src===src)return; el.dataset.src=src; el.src=src; try{await el.decode()}catch(e){} }
+
+// chips (action ticker)
+const chipEls=hits.map(h=>{const d=document.createElement('div');d.className='chip';d.textContent=h.w;$('chips').appendChild(d);return d});
+
+function slam(el,f,rot0=-5){            // f = frames since hit
+  const p=clamp(f/5), q=clamp(f/9);
+  const sc=1+Math.pow(1-p,3)*1.25;
+  const shake=(1-q);
+  const dx=Math.sin(f*3.1)*16*shake, dy=Math.cos(f*2.3)*12*shake;
+  el.style.opacity=f<0?0:clamp(f/2);
+  el.style.transform=`translate(${dx}px,${dy}px) rotate(${rot0*(1-p)-1.5}deg) scale(${sc})`;
+}
+
+async function render(t){
+  const f=t*FPS;
+  // beat pulse
+  const ph=((t/BEAT)%1), pulse=Math.exp(-ph*4.5);
+  const inOutro=t>=B(OUTRO)-1e-6;
+  $('Main').style.display=inOutro?'none':'block';
+  $('Out').style.display=inOutro?'block':'none';
+
+  let flash=0;
+  if(!inOutro){
+    let ci=CUTS.findIndex(c=>t>=B(c.s)-1e-6 && t<B(c.s+c.n)-1e-6); if(ci<0)ci=CUTS.length-1;
+    const c=CUTS[ci], l=t-B(c.s), dur=B(c.n);
+    const idx=clamp(Math.floor(l*FPS+1e-6)+1,1,c.nf);
+    const src=`frames/${c.dir}/${pad(idx)}.jpg`;
+    const isL=c.kind==='L';
+    const tasks=[setImg($('bg'),src)];
+    if(isL) tasks.push(setImg($('imgL'),src)); else tasks.push(setImg($('imgP'),src));
+    await Promise.all(tasks);
+    $('clipL').style.display=isL?'block':'none';
+    $('phone').style.display=isL?'none':'block';
+    const push=1+.09*(l/dur)+.02*pulse;
+    $('clipL').style.transform=`scale(${push})`;
+    $('phone').style.transform=`scale(${1+.05*(l/dur)+.012*pulse})`;
+    $('bg').style.transform=`scale(${1.18+.05*pulse})`;
+    $('bg').style.filter=`blur(60px) brightness(${.5+.22*pulse}) saturate(1.5)`;
+
+    // slam word
+    const w=$('word');
+    if(w.dataset.word!==c.word){
+      w.dataset.word=c.word; w.textContent=c.word; w.className=c.g?'gold':'white';
+      w.style.fontSize='230px'; w.style.top='0px';
+      const maxW=1000; const cw=w.scrollWidth; // measure via a range of inline width
+      const probe=document.createElement('span'); probe.style.cssText='position:absolute;visibility:hidden;white-space:nowrap;font-size:230px;font-weight:800;font-family:Montserrat;text-transform:uppercase;letter-spacing:-.01em';
+      probe.textContent=c.word; document.body.appendChild(probe); const pw=probe.offsetWidth; probe.remove();
+      const size=Math.min(230, Math.floor(230*maxW/Math.max(pw,1)));
+      w.style.fontSize=size+'px';
+      w.style.top=(isL?340:200)+'px';
+    }
+    const fh=(t-B(c.s+c.hit))*FPS;
+    slam(w,fh);
+
+    // action ticker: last 3 hits
+    const done=hits.filter(h=>t>=h.t-1e-6).length;
+    chipEls.forEach((el,i)=>{
+      const slot=(done-1)-i;               // 0 = newest
+      if(i>=done||slot>2){el.style.opacity=0;return}
+      const age=(t-hits[i].t)*FPS;
+      const enter=eo(clamp(age/5));
+      el.style.opacity=(1-slot*.32)*enter;
+      el.style.top=(isL?1400:1480)+(2-slot)*-0+(slot*-72)+(1-enter)*30+'px';
+      el.style.top=((isL?1560:1600)-slot*74+(1-enter)*30)+'px';
+    });
+    flash=Math.max(0,1-(l*FPS)/3)*.55;
+  }else{
+    const l=t-B(OUTRO);
+    const nidx=clamp(Math.floor(l*FPS)+1,1,80);
+    await setImg($('bgO'),`frames/N/${pad(nidx)}.jpg`);
+    $('bgO').style.transform=`scale(${1.02+.04*pulse})`;
+    slam($('t1'),(l-0)*FPS,-4); slam($('t2'),(l-B(.5))*FPS,4);
+    const rb=eo(clamp((l-B(1.5))*FPS/6)), ar=eo(clamp((l-B(2))*FPS/7)), fo=eo(clamp((l-B(3))*FPS/8));
+    $('ribbonO').style.opacity=rb; $('ribbonO').style.transform=`translateY(${(1-rb)*40}px) scale(${1+(1-rb)*.3})`;
+    $('artO').style.opacity=ar; $('artO').style.transform=`translateY(${(1-ar)*60}px) scale(${1+(1-ar)*.25})`;
+    $('forO').style.opacity=fo;
+    flash=Math.max(0,1-(l*FPS)/4)*.8;
+  }
+  $('flash').style.opacity=flash;
+}
+window.render=render;
+window.ready=Promise.all([document.fonts.load('800 100px Montserrat'),$('ribbonO').decode(),$('artO').decode()]).then(()=>document.fonts.ready);
+</script>
+</body>
+</html>

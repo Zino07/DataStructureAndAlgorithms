@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>brag</title>
+<style>
+@font-face{font-family:"Montserrat";src:url("fonts/Montserrat-ExtraBold.ttf") format("truetype");font-weight:800}
+:root{--gold1:#ffe58f;--gold2:#f2a33a}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1920px;height:1080px;overflow:hidden;background:#05060f}
+#stage{position:relative;width:1920px;height:1080px;overflow:hidden;background:#05060f;font-family:"Montserrat",sans-serif;font-weight:800;color:#fff}
+.abs{position:absolute}
+.layer{position:absolute;inset:0;display:none}
+img{display:block}
+
+/* landscape footage layer */
+#bgL{position:absolute;left:-130px;top:-60px;width:2180px;height:1200px;object-fit:cover;filter:blur(46px) brightness(.55) saturate(1.35)}
+#mainWrap{position:absolute;left:91px;top:108px;width:1738px;height:864px;transform-origin:50% 50%;
+  -webkit-mask-image:linear-gradient(to right,transparent 0,#000 80px,#000 calc(100% - 80px),transparent 100%),linear-gradient(to bottom,transparent 0,#000 46px,#000 calc(100% - 46px),transparent 100%);
+  -webkit-mask-composite:source-in;mask-composite:intersect;
+  mask-image:linear-gradient(to right,transparent 0,#000 80px,#000 calc(100% - 80px),transparent 100%),linear-gradient(to bottom,transparent 0,#000 46px,#000 calc(100% - 46px),transparent 100%)}
+#mainL{width:1738px;height:864px}
+#cap{position:absolute;left:0;right:0;top:978px;height:96px;display:flex;justify-content:center;align-items:center;gap:.28em;font-size:56px;letter-spacing:.005em;text-shadow:0 0 26px rgba(255,185,80,.6),0 3px 0 rgba(0,0,0,.45);white-space:nowrap}
+.w{display:inline-block}
+.gold{background:linear-gradient(180deg,var(--gold1),var(--gold2));-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none;filter:drop-shadow(0 3px 0 rgba(60,25,0,.55))}
+#tag{position:absolute;left:0;right:0;top:40px;text-align:center;font-size:21px;letter-spacing:.34em;color:#ffd98a;opacity:.85;text-shadow:0 0 14px rgba(255,170,60,.5)}
+
+/* portrait scene */
+#bgN{position:absolute;left:-480px;top:-420px;width:2880px;height:2000px;object-fit:cover;filter:brightness(.7) saturate(1.1)}
+#dim{position:absolute;inset:0;background:radial-gradient(ellipse at 28% 50%,rgba(5,6,15,.78),rgba(5,6,15,.25) 70%)}
+#phone{position:absolute;left:1217px;top:70px;width:466px;height:941px;border-radius:40px;overflow:hidden;border:4px solid rgba(255,225,150,.28);box-shadow:0 0 90px rgba(255,170,60,.28),0 30px 80px rgba(0,0,0,.6)}
+#mainP{width:466px;height:941px}
+.big{position:absolute;left:150px;font-size:122px;line-height:1.04;letter-spacing:-.01em;text-shadow:0 4px 0 rgba(0,0,0,.35)}
+.big.gold{text-shadow:none}
+
+/* outro */
+#bgO{position:absolute;left:-480px;top:-420px;width:2880px;height:2000px;object-fit:cover;filter:brightness(.95) saturate(1.2)}
+#dimO{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 52%,rgba(5,6,15,.1),rgba(5,6,15,.55) 88%)}
+#title{position:absolute;left:0;right:0;top:110px;text-align:center;font-size:208px;letter-spacing:.01em;line-height:1}
+#ribbon{position:absolute;left:660px;top:340px;width:600px}
+#art{position:absolute;left:555px;top:480px;width:810px}
+#for{position:absolute;left:0;right:0;top:1002px;text-align:center;font-size:24px;letter-spacing:.38em;color:rgba(255,235,190,.85)}
+
+#fade{position:absolute;inset:0;background:#05060f;opacity:0;pointer-events:none}
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- landscape footage scenes (1,2,3,5) -->
+  <div class="layer" id="Ls">
+    <img id="bgL">
+    <div id="mainWrap"><img id="mainL"></div>
+    <div id="tag">CARD CLASH · PREMIUM EDITION</div>
+    <div id="cap"></div>
+  </div>
+
+  <!-- portrait scene (4) -->
+  <div class="layer" id="Ps">
+    <img id="bgN">
+    <div id="dim"></div>
+    <div class="big" id="p1" style="top:330px">Wild card?</div>
+    <div class="big gold" id="p2" style="top:455px">Pick any</div>
+    <div class="big gold" id="p3" style="top:580px">colour.</div>
+    <div id="phone"><img id="mainP"></div>
+  </div>
+
+  <!-- outro (6) -->
+  <div class="layer" id="Os">
+    <img id="bgO">
+    <div id="dimO"></div>
+    <div id="title" class="gold">CARD CLASH</div>
+    <img id="ribbon" src="art/ribbon_premium.webp">
+    <img id="art" src="art/cards_subtitle.webp">
+    <div id="for">FOR ANDROID</div>
+  </div>
+
+  <div id="fade"></div>
+</div>
+
+<script>
+const clamp=(x,a=0,b=1)=>Math.min(b,Math.max(a,x));
+const P=(t,s,d)=>clamp((t-s)/d);
+const eo=x=>1-Math.pow(1-x,4);
+const eio=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2;
+const $=id=>document.getElementById(id);
+const FPS=24;
+const S=[0,2.5,6.5,11,15,17.5,20];
+const pad=n=>String(n).padStart(4,'0');
+
+// scene 0-based index -> footage dir and the caption words with (offset s, gold?)
+const SEG=[
+  {dir:'A',n:60,cap:[['Space',.25],['card',.5],['battles.',.75,1]]},
+  {dir:'B',n:96,cap:[['Five',.5],['modes.',.5],['One',1.0],['table.',1.0]]},
+  {dir:'C',n:108,cap:[['Reverse.',.5],['Skip.',2.5],['Stack.',3.0,1]]},
+  {dir:'D',n:96},
+  {dir:'E',n:60,cap:[['Every',.5],['colour',.5],['lights',1.0],['the',1.0],['table.',1.0,1]]},
+];
+
+const cap=$('cap');
+function buildCaption(i){
+  cap.innerHTML='';
+  (SEG[i].cap||[]).forEach(([w,t,g])=>{
+    const s=document.createElement('span'); s.className='w'+(g?' gold':''); s.textContent=w; s.dataset.t=t; cap.appendChild(s);
+  });
+}
+let capFor=-1;
+
+const cache={};
+async function setImg(el,src){
+  if(el.dataset.src===src)return;
+  el.dataset.src=src; el.src=src;
+  try{await el.decode()}catch(e){}
+}
+
+function reveal(el,t,s,d=.6,dy=34,blur=10){
+  const p=eo(P(t,s,d));
+  el.style.opacity=p;
+  el.style.transform=`translateY(${(1-p)*dy}px)`;
+  el.style.filter=p<1?`blur(${(1-p)*blur}px)`+(el.classList.contains('gold')?' drop-shadow(0 3px 0 rgba(60,25,0,.55))':''):(el.classList.contains('gold')?'drop-shadow(0 3px 0 rgba(60,25,0,.55))':'none');
+}
+
+async function render(t){
+  let i=0; while(i<6 && t>=S[i+1]) i++;
+  const l=t-S[i], dur=S[i+1]-S[i];
+  const idx=clamp(Math.floor(l*FPS+1e-6)+1,1,i<5?SEG[i].n:156);
+
+  $('Ls').style.display=(i===0||i===1||i===2||i===4)?'block':'none';
+  $('Ps').style.display=i===3?'block':'none';
+  $('Os').style.display=i===5?'block':'none';
+
+  if(i===0||i===1||i===2||i===4){
+    if(capFor!==i){buildCaption(i);capFor=i}
+    const src=`frames/${SEG[i].dir}/${pad(idx)}.jpg`;
+    await Promise.all([setImg($('mainL'),src),setImg($('bgL'),src)]);
+    const push=1+.035*P(l,0,dur);
+    $('mainWrap').style.transform=`scale(${push})`;
+    [...cap.children].forEach(s=>reveal(s,l,+s.dataset.t,.55,28,8));
+    $('tag').style.opacity=.85*eo(P(l,.2,.6));
+  }else if(i===3){
+    await Promise.all([setImg($('mainP'),`frames/D/${pad(idx)}.jpg`),setImg($('bgN'),`frames/N/${pad(clamp(Math.floor(l*FPS)+1,1,96))}.jpg`)]);
+    reveal($('p1'),l,0,.6,40,12);
+    reveal($('p2'),l,1.0,.6,40,12);
+    reveal($('p3'),l,1.0,.6,40,12);
+    reveal($('phone'),l,0,.7,50,6);
+    $('phone').style.transform=`translateY(${(1-eo(P(l,0,.7)))*50}px) scale(${1+.02*P(l,0,dur)})`;
+  }else{
+    const nidx=clamp(96+Math.floor(l*FPS)+1,97,156);
+    await setImg($('bgO'),`frames/N/${pad(nidx)}.jpg`);
+    reveal($('title'),l,.5,.8,50,14);
+    reveal($('ribbon'),l,1.0,.7,30,8);
+    reveal($('art'),l,1.5,.8,50,10);
+    reveal($('for'),l,1.5,.8,14,3);
+  }
+  // dip through the dark on every cut
+  const f=Math.max(1-eio(P(l,0,.2)), eio(P(l,dur-.2,.2)));
+  $('fade').style.opacity=i===0&&l<.2?0:(i===5&&l>dur-.2?0:f);
+}
+window.render=render;
+window.ready=Promise.all([document.fonts.load('800 100px Montserrat'),document.getElementById('ribbon').decode(),document.getElementById('art').decode()]).then(()=>document.fonts.ready);
+</script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+# Third-party assets downloaded from the brag'd site, plus regenerable intermediates
+work/site/
+work/page.html
+work/styles.css
+work/inter.css
+work/shot*
+work/stills/
+work/frame0.jpg
+work/f106.jpg
+work/poster.jpg
+work/music.wav
+work/video-silent.mp4
+work/stills-v/
+work/poster-vertical.jpg
+work/video-vertical-silent.mp4
+work/vframe0.jpg
+work/v178.jpg

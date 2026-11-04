@@ -1,0 +1,11 @@
+# Source recordings' extracted frames and app assets, plus regenerable intermediates
+work/frames/
+work/art/
+work/fonts/
+work/stills/
+work/music.wav
+work/video-silent.mp4
+work/poster.jpg
+work/check*
+work/chk_*
+work/check*
